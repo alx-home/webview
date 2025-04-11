@@ -98,11 +98,11 @@ webview_find_dependencies()
 FetchContent_Declare(
     json
     GIT_REPOSITORY https://github.com/alx-home/json
-    GIT_TAG 0.12.0)
+    GIT_TAG 1.0.0)
 FetchContent_MakeAvailable(json)
 
 FetchContent_Declare(
     promise
     GIT_REPOSITORY https://github.com/alx-home/promise
-    GIT_TAG 0.12.0)
+    GIT_TAG 1.0.0)
 FetchContent_MakeAvailable(promise)
