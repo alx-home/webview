@@ -2,6 +2,8 @@ include(FetchContent)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 
+option(PROMISE_MEMCHECK "Enable promise leak detection" OFF)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(WEBVIEW_MSWEBVIEW2_VERSION "1.0.1587.40" CACHE STRING "MS WebView2 version")
     option(WEBVIEW_USE_BUILTIN_MSWEBVIEW2 "Use built-in MS WebView2" ON)
