@@ -76,10 +76,11 @@ public:
    virtual void open_dev_tools()            = 0;
    virtual void install_ressource_handler() = 0;
 
+   virtual user_script* add_user_script(std::string_view js);
+
 protected:
    virtual void navigate_impl(std::string_view url) = 0;
 
-   virtual user_script* add_user_script(std::string_view js);
    virtual user_script  add_user_script_impl(std::string_view js) = 0;
    virtual user_script* replace_user_script(user_script const& old_script, std::string_view new_script_code);
    virtual void         remove_all_user_scripts(std::list<user_script> const& scripts)              = 0;
