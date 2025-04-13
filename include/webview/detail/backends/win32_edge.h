@@ -210,12 +210,12 @@ public:
    void eval(std::string_view js) final;
    void set_html(std::string_view html) final;
 
+   void open_dev_tools() final;
+
 private:
    void dispatch(std::function<void()>&& f) final;
 
    void navigate_impl(std::string_view url) final;
-
-   void open_dev_tools() final;
 
    std::multimap<std::wstring, url_handler_t, std::less<>> handlers_;
 
