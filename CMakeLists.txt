@@ -20,7 +20,7 @@ target_include_directories(webview INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/includ
 target_include_directories(webview PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/webview")
 
 target_link_libraries(webview PUBLIC ${WEBVIEW_DEPENDENCIES})
-target_link_libraries(webview PRIVATE package Dwmapi alx-home::json alx-home::promise)
+target_link_libraries(webview PRIVATE Dwmapi alx-home::json alx-home::promise)
 
 set(COMPILE_OPTIONS
     -std=c++2c
