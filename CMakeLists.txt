@@ -1,26 +1,26 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(webview LANGUAGES CXX)
+project(alx-home_webview LANGUAGES CXX)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/webview.cmake")
 
-add_library(webview 
+add_library(alx-home_webview 
         src/engine_base.cpp
         src/backends/win32_edge.cpp
         src/user_script.cpp
         )
-add_library(alx-home::webview ALIAS webview)
+add_library(alx-home::webview ALIAS alx-home_webview)
 
-set_target_properties(webview PROPERTIES LINKER_LANGUAGE CXX)
-set_target_properties(webview PROPERTIES CXX_STANDARD 26)
-set_target_properties(webview PROPERTIES CMAKE_CXX_STANDARD_REQUIRED ON)
-set_target_properties(webview PROPERTIES CMAKE_CXX_EXTENSIONS ON)
+set_target_properties(alx-home_webview PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(alx-home_webview PROPERTIES CXX_STANDARD 26)
+set_target_properties(alx-home_webview PROPERTIES CMAKE_CXX_STANDARD_REQUIRED ON)
+set_target_properties(alx-home_webview PROPERTIES CMAKE_CXX_EXTENSIONS ON)
 
-target_include_directories(webview INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_include_directories(webview PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/webview")
+target_include_directories(alx-home_webview INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(alx-home_webview PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include/webview")
 
-target_link_libraries(webview PUBLIC ${WEBVIEW_DEPENDENCIES})
-target_link_libraries(webview PRIVATE Dwmapi alx-home::json alx-home::promise)
+target_link_libraries(alx-home_webview PUBLIC ${WEBVIEW_DEPENDENCIES})
+target_link_libraries(alx-home_webview PRIVATE Dwmapi alx-home::json alx-home::promise)
 
 set(COMPILE_OPTIONS
     -std=c++2c
@@ -49,9 +49,9 @@ endif(DEFINED SANITIZE)
 
 if(MSVC)
     list(TRANSFORM COMPILE_OPTIONS PREPEND "-clang:")
-    target_compile_options(webview PUBLIC /W4 ${COMPILE_OPTIONS})
+    target_compile_options(alx-home_webview PUBLIC /W4 ${COMPILE_OPTIONS})
 else()
-    target_compile_options(webview PUBLIC 
+    target_compile_options(alx-home_webview PUBLIC 
         -export-dynamic
         -ggdb3 -pg -g
         ${COMPILE_OPTIONS}
