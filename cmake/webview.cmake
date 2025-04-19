@@ -2,7 +2,14 @@ include(FetchContent)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 
-option(PROMISE_MEMCHECK "Enable promise leak detection" OFF)
+option(PROMISE_MEMCHECK_RELEASE "Enable promise leak detection in release mode" OFF)
+option(PROMISE_MEMCHECK_DEBUG "Enable promise leak detection in debug mode" ON)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(PROMISE_MEMCHECK ${PROMISE_MEMCHECK_DEBUG})
+else()
+    set(PROMISE_MEMCHECK ${PROMISE_MEMCHECK_RELEASE})
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(WEBVIEW_MSWEBVIEW2_VERSION "1.0.1587.40" CACHE STRING "MS WebView2 version")
