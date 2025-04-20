@@ -151,11 +151,13 @@ public:
 
    explicit webview2_user_script_added_handler(callback_fn const& cb);
 
-   virtual ~webview2_user_script_added_handler()                                                  = default;
-   webview2_user_script_added_handler(const webview2_user_script_added_handler& other)            = delete;
-   webview2_user_script_added_handler& operator=(const webview2_user_script_added_handler& other) = delete;
-   webview2_user_script_added_handler(webview2_user_script_added_handler&& other)                 = delete;
-   webview2_user_script_added_handler& operator=(webview2_user_script_added_handler&& other)      = delete;
+   virtual ~webview2_user_script_added_handler()                                       = default;
+   webview2_user_script_added_handler(const webview2_user_script_added_handler& other) = delete;
+   webview2_user_script_added_handler& operator=(const webview2_user_script_added_handler& other
+   )                                                                                   = delete;
+   webview2_user_script_added_handler(webview2_user_script_added_handler&& other)      = delete;
+   webview2_user_script_added_handler& operator=(webview2_user_script_added_handler&& other
+   )                                                                                   = delete;
 
    ULONG STDMETHODCALLTYPE AddRef();
    ULONG STDMETHODCALLTYPE Release();
@@ -170,9 +172,7 @@ private:
 
 class win32_edge_engine final : public Webview {
 public:
-   static auto make_options() {
-      return Microsoft::WRL::Make<CoreWebView2EnvironmentOptions>();
-   }
+   static auto make_options() { return Microsoft::WRL::Make<CoreWebView2EnvironmentOptions>(); }
 
    static void set_schemes_option(
       std::vector<std::string> const&                         schemes,
@@ -199,7 +199,7 @@ public:
    ICoreWebView2Controller* browser_controller() const;
 
    void register_url_handler(std::string const& filter, url_handler_t&& handler) final;
-   void install_ressource_handler() final;
+   void InstallResourceHandler() final;
 
    void set_title(std::string_view title) final;
    void set_size(int width, int height, Hint hints) final;
@@ -224,15 +224,24 @@ private:
    make_response(http::response_t const& responseData, HRESULT& result);
 
    //---------------------------------------------------------------------------------------------------------------------
-   http::request_t make_request(std::string const& uri, COREWEBVIEW2_WEB_RESOURCE_CONTEXT, ICoreWebView2WebResourceRequest* webViewRequest);
+   http::request_t make_request(
+      std::string const& uri,
+      COREWEBVIEW2_WEB_RESOURCE_CONTEXT,
+      ICoreWebView2WebResourceRequest* webViewRequest
+   );
 
    user_script add_user_script_impl(std::string_view js) final;
    void        remove_all_user_scripts(std::list<user_script> const& scripts) final;
    bool        are_user_scripts_equal(user_script const& first, user_script const& second) final;
 
 private:
-   void
-   embed(HWND wnd, bool debug, msg_cb_t cb, Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options, std::string_view user_data_dir);
+   void embed(
+      HWND                                                    wnd,
+      bool                                                    debug,
+      msg_cb_t                                                cb,
+      Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options,
+      std::string_view                                        user_data_dir
+   );
 
    void resize_widget();
    void resize_webview();
@@ -252,7 +261,8 @@ private:
 
    // The app is expected to call CoInitializeEx before
    // CreateCoreWebView2EnvironmentWithOptions.
-   // Source: https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/webview2-idl#createcorewebview2environmentwithoptions
+   // Source:
+   // https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/webview2-idl#createcorewebview2environmentwithoptions
    com_init_wrapper         com_init_;
    HWND                     window_         = nullptr;
    HWND                     widget_         = nullptr;

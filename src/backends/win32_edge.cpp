@@ -45,7 +45,9 @@ webview2_com_handler::webview2_com_handler(HWND hwnd, msg_cb_t msgCb, webview2_c
    , cb_(cb) {}
 
 ULONG STDMETHODCALLTYPE
-webview2_com_handler::AddRef() { return ++ref_count_; }
+webview2_com_handler::AddRef() {
+   return ++ref_count_;
+}
 
 ULONG STDMETHODCALLTYPE
 webview2_com_handler::Release() {
@@ -74,7 +76,10 @@ webview2_com_handler::QueryInterface(REFIID riid, LPVOID* ppv) {
    // that it is the only interface requested in this case. None have been
    // observed to be requested when using the official WebView2 loader.
 
-   if (cast_if_equal_iid(this, riid, controller_completed, ppv) || cast_if_equal_iid(this, riid, environment_completed, ppv) || cast_if_equal_iid(this, riid, message_received, ppv) || cast_if_equal_iid(this, riid, permission_requested, ppv)) {
+   if (cast_if_equal_iid(this, riid, controller_completed, ppv)
+       || cast_if_equal_iid(this, riid, environment_completed, ppv)
+       || cast_if_equal_iid(this, riid, message_received, ppv)
+       || cast_if_equal_iid(this, riid, permission_requested, ppv)) {
       return S_OK;
    }
 
@@ -119,7 +124,10 @@ webview2_com_handler::Invoke(HRESULT res, ICoreWebView2Controller* controller) {
 }
 
 HRESULT STDMETHODCALLTYPE
-webview2_com_handler::Invoke(ICoreWebView2* /*sender*/, ICoreWebView2WebMessageReceivedEventArgs* args) {
+webview2_com_handler::Invoke(
+   ICoreWebView2* /*sender*/,
+   ICoreWebView2WebMessageReceivedEventArgs* args
+) {
    LPWSTR message{};
    auto   res = args->TryGetWebMessageAsString(&message);
    if (SUCCEEDED(res)) {
@@ -131,7 +139,10 @@ webview2_com_handler::Invoke(ICoreWebView2* /*sender*/, ICoreWebView2WebMessageR
 }
 
 HRESULT STDMETHODCALLTYPE
-webview2_com_handler::Invoke(ICoreWebView2* /*sender*/, ICoreWebView2PermissionRequestedEventArgs* args) {
+webview2_com_handler::Invoke(
+   ICoreWebView2* /*sender*/,
+   ICoreWebView2PermissionRequestedEventArgs* args
+) {
    COREWEBVIEW2_PERMISSION_KIND kind;
    args->get_PermissionKind(&kind);
    if (kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ) {
@@ -153,9 +164,10 @@ webview2_com_handler::set_attempt_handler(std::function<HRESULT()>&& attempt_han
 void
 webview2_com_handler::try_create_environment() noexcept {
    // WebView creation fails with HRESULT_FROM_WIN32(ERROR_INVALID_STATE) if
-   // a running instance using the same user data folder exists, and the
+   // a running instance using the same user data folder Exists, and the
    // Environment objects have different EnvironmentOptions.
-   // Source: https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2environment?view=webview2-1.0.1150.38
+   // Source:
+   // https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2environment?view=webview2-1.0.1150.38
    if (attempts_ < max_attempts_) {
       ++attempts_;
       auto res = attempt_handler_();
@@ -227,16 +239,15 @@ win32_edge_engine::set_schemes_option(
       };
    }
 
-   std::vector<Microsoft::WRL::ComPtr<ICoreWebView2CustomSchemeRegistration>>
-                                                       webSchemes{};
-   std::vector<ICoreWebView2CustomSchemeRegistration*> data;
+   using schemes_t = std::vector<Microsoft::WRL::ComPtr<ICoreWebView2CustomSchemeRegistration>>;
+   schemes_t webSchemes{};
+   using schemes_registration_t = std::vector<ICoreWebView2CustomSchemeRegistration*>;
+   schemes_registration_t data{};
 
    for (auto const& scheme : schemes) {
       auto const wscheme = widen_string(scheme);
       auto const schemeReg =
-         Microsoft::WRL::Make<CoreWebView2CustomSchemeRegistration>(
-            wscheme.c_str()
-         );
+         Microsoft::WRL::Make<CoreWebView2CustomSchemeRegistration>(wscheme.c_str());
 
       std::array<wchar_t const*, 1> origins{L"*"};
       schemeReg->SetAllowedOrigins(static_cast<UINT32>(origins.size()), origins.data());
@@ -270,7 +281,12 @@ win32_edge_engine::win32_edge_engine(
       enable_dpi_awareness();
 
       auto icon = static_cast<HICON>(LoadImage(
-         hInstance, IDI_APPLICATION, IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR
+         hInstance,
+         IDI_APPLICATION,
+         IMAGE_ICON,
+         GetSystemMetrics(SM_CXICON),
+         GetSystemMetrics(SM_CYICON),
+         LR_DEFAULTCOLOR
       ));
 
       // Create a top-level window.
@@ -291,9 +307,7 @@ win32_edge_engine::win32_edge_engine(
             enable_non_client_dpi_scaling_if_needed(hwnd);
             apply_window_theme(hwnd);
          } else {
-            w = reinterpret_cast<win32_edge_engine*>(
-               GetWindowLongPtrW(hwnd, GWLP_USERDATA)
-            );
+            w = reinterpret_cast<win32_edge_engine*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
          }
 
          if (!w) {
@@ -329,9 +343,9 @@ win32_edge_engine::win32_edge_engine(
                return TRUE;
             }
             case 0x02E0 /*WM_DPICHANGED*/: {
-               // Windows 10: The size we get here is exactly what we supplied to WM_GETDPISCALEDSIZE.
-               // Windows 11: The size we get here is NOT what we supplied to WM_GETDPISCALEDSIZE.
-               // Due to this difference, don't use the suggested bounds.
+               // Windows 10: The size we get here is exactly what we supplied to
+               // WM_GETDPISCALEDSIZE. Windows 11: The size we get here is NOT what we supplied to
+               // WM_GETDPISCALEDSIZE. Due to this difference, don't use the suggested bounds.
                auto dpi = static_cast<int>(HIWORD(wp));
                w->on_dpi_changed(dpi);
                break;
@@ -355,7 +369,19 @@ win32_edge_engine::win32_edge_engine(
       });
       RegisterClassExW(&wc);
 
-      CreateWindowW(L"webview", L"", style ? style : WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, nullptr, nullptr, hInstance, this);
+      CreateWindowW(
+         L"webview",
+         L"",
+         style ? style : WS_OVERLAPPEDWINDOW,
+         CW_USEDEFAULT,
+         CW_USEDEFAULT,
+         0,
+         0,
+         nullptr,
+         nullptr,
+         hInstance,
+         this
+      );
       if (!window_) {
          throw exception{error_t::WEBVIEW_ERROR_INVALID_STATE, "Window is null"};
       }
@@ -384,9 +410,7 @@ win32_edge_engine::win32_edge_engine(
          w->widget_ = hwnd;
          SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(w));
       } else {
-         w = reinterpret_cast<win32_edge_engine*>(
-            GetWindowLongPtrW(hwnd, GWLP_USERDATA)
-         );
+         w = reinterpret_cast<win32_edge_engine*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
       }
 
       if (!w) {
@@ -407,7 +431,20 @@ win32_edge_engine::win32_edge_engine(
       return 0;
    });
    RegisterClassExW(&widget_wc);
-   CreateWindowExW(WS_EX_CONTROLPARENT, L"webview_widget", nullptr, WS_CHILD, 0, 0, 0, 0, window_, nullptr, hInstance, this);
+   CreateWindowExW(
+      WS_EX_CONTROLPARENT,
+      L"webview_widget",
+      nullptr,
+      WS_CHILD,
+      0,
+      0,
+      0,
+      0,
+      window_,
+      nullptr,
+      hInstance,
+      this
+   );
    if (!widget_) {
       throw exception{error_t::WEBVIEW_ERROR_INVALID_STATE, "Widget window is null"};
    }
@@ -426,9 +463,7 @@ win32_edge_engine::win32_edge_engine(
          w->message_window_ = hwnd;
          SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(w));
       } else {
-         w = reinterpret_cast<win32_edge_engine*>(
-            GetWindowLongPtrW(hwnd, GWLP_USERDATA)
-         );
+         w = reinterpret_cast<win32_edge_engine*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
       }
 
       if (!w) {
@@ -452,7 +487,9 @@ win32_edge_engine::win32_edge_engine(
       return 0;
    });
    RegisterClassExW(&message_wc);
-   CreateWindowExW(0, L"webview_message", nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, hInstance, this);
+   CreateWindowExW(
+      0, L"webview_message", nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, hInstance, this
+   );
    if (!message_window_) {
       throw exception{error_t::WEBVIEW_ERROR_INVALID_STATE, "Message window is null"};
    }
@@ -463,8 +500,7 @@ win32_edge_engine::win32_edge_engine(
       SetFocus(window_);
    }
 
-   auto cb =
-      std::bind(&win32_edge_engine::on_message, this, std::placeholders::_1);
+   auto cb = std::bind(&win32_edge_engine::on_message, this, std::placeholders::_1);
 
    embed(widget_, debug, cb, options, user_data_dir);
 }
@@ -484,11 +520,9 @@ win32_edge_engine::~win32_edge_engine() {
    }
    // Replace wndproc to avoid callbacks and other bad things during
    // destruction.
-   auto wndproc = reinterpret_cast<LONG_PTR>(
-      +[](HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-         return DefWindowProcW(hwnd, msg, wp, lp);
-      }
-   );
+   auto wndproc = reinterpret_cast<LONG_PTR>(+[](HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+      return DefWindowProcW(hwnd, msg, wp, lp);
+   });
    if (widget_) {
       SetWindowLongPtrW(widget_, GWLP_WNDPROC, wndproc);
    }
@@ -587,13 +621,19 @@ win32_edge_engine::set_size(int width, int height, Hint hints) {
       minsz_.x = width;
       minsz_.y = height;
    } else {
-      auto dpi = get_window_dpi(window_);
-      dpi_     = dpi;
-      auto scaled_size =
-         scale_size(width, height, get_default_window_dpi(), dpi);
-      auto frame_size =
-         make_window_frame_size(window_, scaled_size.cx, scaled_size.cy, dpi);
-      SetWindowPos(window_, nullptr, 0, 0, frame_size.cx, frame_size.cy, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED);
+      auto dpi         = get_window_dpi(window_);
+      dpi_             = dpi;
+      auto scaled_size = scale_size(width, height, get_default_window_dpi(), dpi);
+      auto frame_size  = make_window_frame_size(window_, scaled_size.cx, scaled_size.cy, dpi);
+      SetWindowPos(
+         window_,
+         nullptr,
+         0,
+         0,
+         frame_size.cx,
+         frame_size.cy,
+         SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED
+      );
    }
 }
 
@@ -647,7 +687,7 @@ win32_edge_engine::register_url_handler(std::string const& filter, url_handler_t
 }
 
 void
-win32_edge_engine::install_ressource_handler() {
+win32_edge_engine::InstallResourceHandler() {
    ::EventRegistrationToken token;
 
    auto const result = webview_->add_WebResourceRequested(
@@ -660,8 +700,7 @@ win32_edge_engine::install_ressource_handler() {
                return result;
             }
 
-            Microsoft::WRL::ComPtr<ICoreWebView2WebResourceRequest>
-               webViewRequest;
+            Microsoft::WRL::ComPtr<ICoreWebView2WebResourceRequest> webViewRequest;
             args->get_Request(&webViewRequest);
 
             const auto wuri = [&webViewRequest]() {
@@ -677,8 +716,7 @@ win32_edge_engine::install_ressource_handler() {
                if (std::regex_match(wuri, std::wregex{handler.first})) {
                   auto const request =
                      make_request(narrow_string(wuri), resourceContext, webViewRequest.Get());
-                  auto const response =
-                     make_response(handler.second(request), result);
+                  auto const response = make_response(handler.second(request), result);
 
                   if (result != S_OK) {
                      return result;
@@ -690,13 +728,15 @@ win32_edge_engine::install_ressource_handler() {
 
             return S_OK;
          }
-      )
-         .Get(),
+      ).Get(),
       &token
    );
 
    if (result != S_OK) {
-      throw exception{error_t::WEBVIEW_ERROR_UNSPECIFIED, std::format("Could not install resource handler: {}", std::to_string(result))};
+      throw exception{
+         error_t::WEBVIEW_ERROR_UNSPECIFIED,
+         std::format("Could not install resource handler: {}", std::to_string(result))
+      };
    }
 }
 
@@ -716,8 +756,7 @@ win32_edge_engine::make_response(http::response_t const& responseData, HRESULT& 
 
    std::wstring responseHeaders;
    for (auto const& [key, value] : responseData.headers) {
-      responseHeaders +=
-         widen_string(key) + L": " + widen_string(value) + L"\r\n";
+      responseHeaders += widen_string(key) + L": " + widen_string(value) + L"\r\n";
    }
 
    if (!responseHeaders.empty()) {
@@ -741,30 +780,35 @@ win32_edge_engine::make_response(http::response_t const& responseData, HRESULT& 
 
 //---------------------------------------------------------------------------------------------------------------------
 http::request_t
-win32_edge_engine::make_request(std::string const& uri, COREWEBVIEW2_WEB_RESOURCE_CONTEXT, ICoreWebView2WebResourceRequest* webViewRequest) {
+win32_edge_engine::make_request(
+   std::string const& uri,
+   COREWEBVIEW2_WEB_RESOURCE_CONTEXT,
+   ICoreWebView2WebResourceRequest* webViewRequest
+) {
    return http::request_t{
-      .getContent = [webViewRequest,
-                     contentMemo = std::string{}]() mutable {
-         if (!contentMemo.empty()) {
+      .getContent =
+         [webViewRequest, contentMemo = std::string{}]() mutable {
+            if (!contentMemo.empty()) {
+               return contentMemo;
+            }
+
+            Microsoft::WRL::ComPtr<IStream> stream;
+            webViewRequest->get_Content(&stream);
+
+            if (!stream) {
+               return contentMemo;
+            }
+
+            // FIXME: Dont read the whole thing into memory, if possible via streaming.
+            ULONG bytesRead = 0;
+            do {
+               std::array<char, 1024> buffer{};
+               stream->Read(buffer.data(), 1024, &bytesRead);
+               contentMemo.append(buffer.data(), bytesRead);
+            } while (bytesRead == 1024);
             return contentMemo;
-         }
-
-         Microsoft::WRL::ComPtr<IStream> stream;
-         webViewRequest->get_Content(&stream);
-
-         if (!stream) {
-            return contentMemo;
-         }
-
-         // FIXME: Dont read the whole thing into memory, if possible via streaming.
-         ULONG bytesRead = 0;
-         do {
-            std::array<char, 1024> buffer{};
-            stream->Read(buffer.data(), 1024, &bytesRead);
-            contentMemo.append(buffer.data(), bytesRead);
-         } while (bytesRead == 1024);
-         return contentMemo; },
-      .uri        = uri,
+         },
+      .uri = uri,
       .method =
          [webViewRequest]() {
             LPWSTR method;
@@ -778,8 +822,7 @@ win32_edge_engine::make_request(std::string const& uri, COREWEBVIEW2_WEB_RESOURC
             ICoreWebView2HttpRequestHeaders* headers;
             webViewRequest->get_Headers(&headers);
 
-            Microsoft::WRL::ComPtr<ICoreWebView2HttpHeadersCollectionIterator>
-               iterator;
+            Microsoft::WRL::ComPtr<ICoreWebView2HttpHeadersCollectionIterator> iterator;
             headers->GetIterator(&iterator);
 
             std::unordered_multimap<std::string, std::string> headersMap;
@@ -829,8 +872,7 @@ win32_edge_engine::add_user_script_impl(std::string_view js) {
       }
       done = true;
    }};
-   auto                               res =
-      webview_->AddScriptToExecuteOnDocumentCreated(wjs.c_str(), &handler);
+   auto res = webview_->AddScriptToExecuteOnDocumentCreated(wjs.c_str(), &handler);
    if (SUCCEEDED(res)) {
       // Sadly we need to pump the even loop in order to get the script ID.
       while (!done) {
@@ -840,7 +882,10 @@ win32_edge_engine::add_user_script_impl(std::string_view js) {
    // TODO: There's a non-zero chance that we didn't get the script ID.
    //       We need to convey the error somehow.
    return {
-      js, user_script::impl_ptr{new user_script::impl{script_id, wjs}, [](user_script::impl* p) { delete p; }}
+      js,
+      user_script::impl_ptr{
+         new user_script::impl{script_id, wjs}, [](user_script::impl* p) { delete p; }
+      }
    };
 }
 
@@ -860,18 +905,28 @@ win32_edge_engine::are_user_scripts_equal(user_script const& first, user_script 
 }
 
 void
-win32_edge_engine::embed(HWND wnd, bool debug, msg_cb_t cb, Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options, std::string_view user_data_dir) {
+win32_edge_engine::embed(
+   HWND                                                    wnd,
+   bool                                                    debug,
+   msg_cb_t                                                cb,
+   Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options,
+   std::string_view                                        user_data_dir
+) {
    std::atomic_flag flag = ATOMIC_FLAG_INIT;
    flag.test_and_set();
 
    std::wstring currentExePath;
    currentExePath.reserve(MAX_PATH);
-   currentExePath.resize(GetModuleFileNameW(nullptr, currentExePath.data(), currentExePath.capacity()));
+   currentExePath.resize(
+      GetModuleFileNameW(nullptr, currentExePath.data(), currentExePath.capacity())
+   );
 
    std::wstring currentExeName{PathFindFileNameW(currentExePath.c_str())};
 
    com_handler_ = new webview2_com_handler(
-      wnd, cb, [&](ICoreWebView2Controller* controller, ICoreWebView2* webview) {
+      wnd,
+      cb,
+      [&](ICoreWebView2Controller* controller, ICoreWebView2* webview) {
          if (!controller || !webview) {
             flag.clear();
             return;
@@ -888,7 +943,10 @@ win32_edge_engine::embed(HWND wnd, bool debug, msg_cb_t cb, Microsoft::WRL::ComP
 
    com_handler_->set_attempt_handler([&] {
       return webview2_loader_.create_environment_with_options(
-         nullptr, wuser_data_dir.size() ? wuser_data_dir.c_str() : nullptr, options.Get(), com_handler_
+         nullptr,
+         wuser_data_dir.size() ? wuser_data_dir.c_str() : nullptr,
+         options.Get(),
+         com_handler_
       );
    });
    com_handler_->try_create_environment();
@@ -965,9 +1023,7 @@ win32_edge_engine::focus_webview() {
 bool
 win32_edge_engine::is_webview2_available() const noexcept {
    LPWSTR version_info = nullptr;
-   auto   res          = webview2_loader_.get_available_browser_version_string(
-      nullptr, &version_info
-   );
+   auto   res = webview2_loader_.get_available_browser_version_string(nullptr, &version_info);
    // The result will be equal to HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)
    // if the WebView2 runtime is not installed.
    auto ok = SUCCEEDED(res) && version_info;
@@ -980,9 +1036,16 @@ win32_edge_engine::is_webview2_available() const noexcept {
 void
 win32_edge_engine::on_dpi_changed(int dpi) {
    auto scaled_size = get_scaled_size(dpi_, dpi);
-   auto frame_size =
-      make_window_frame_size(window_, scaled_size.cx, scaled_size.cy, dpi);
-   SetWindowPos(window_, nullptr, 0, 0, frame_size.cx, frame_size.cy, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED);
+   auto frame_size  = make_window_frame_size(window_, scaled_size.cx, scaled_size.cy, dpi);
+   SetWindowPos(
+      window_,
+      nullptr,
+      0,
+      0,
+      frame_size.cx,
+      frame_size.cy,
+      SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED
+   );
    dpi_ = dpi;
 }
 

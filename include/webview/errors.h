@@ -61,7 +61,7 @@ enum class error_t {
    /// OK/Success. Functions that return error codes will typically return this
    /// to signify successful operations.
    WEBVIEW_ERROR_OK = 0,
-   /// Signifies that something already exists.
+   /// Signifies that something already Exists.
    WEBVIEW_ERROR_DUPLICATE = 1,
    /// Signifies that something does not exist.
    WEBVIEW_ERROR_NOT_FOUND = 2
@@ -104,9 +104,7 @@ public:
    error_info const&  error() const { return error_; }
    std::exception_ptr cause() const { return cause_; }
 
-   const char* what() const noexcept override {
-      return error_.message().c_str();
-   }
+   const char* what() const noexcept override { return error_.message().c_str(); }
 
 private:
    error_info         error_{error_t::WEBVIEW_ERROR_UNSPECIFIED};

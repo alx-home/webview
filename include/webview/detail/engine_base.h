@@ -58,9 +58,8 @@ public:
 
    virtual void register_url_handler(std::string const& filter, url_handler_t&& handler) = 0;
 
-   template <class Promise>
-   void bind(std::string_view name, Promise&& promise);
-   void unbind(std::string_view name);
+   template <class Promise> void bind(std::string_view name, Promise&& promise);
+   void                          unbind(std::string_view name);
 
    virtual void run()                               = 0;
    virtual void terminate()                         = 0;
@@ -72,19 +71,20 @@ public:
 
    void init(std::string_view js);
 
-   virtual void eval(std::string_view js)   = 0;
-   virtual void open_dev_tools()            = 0;
-   virtual void install_ressource_handler() = 0;
+   virtual void eval(std::string_view js) = 0;
+   virtual void open_dev_tools()          = 0;
+   virtual void InstallResourceHandler()  = 0;
 
    virtual user_script* add_user_script(std::string_view js);
 
 protected:
    virtual void navigate_impl(std::string_view url) = 0;
 
-   virtual user_script  add_user_script_impl(std::string_view js) = 0;
-   virtual user_script* replace_user_script(user_script const& old_script, std::string_view new_script_code);
-   virtual void         remove_all_user_scripts(std::list<user_script> const& scripts)              = 0;
-   virtual bool         are_user_scripts_equal(user_script const& first, user_script const& second) = 0;
+   virtual user_script add_user_script_impl(std::string_view js) = 0;
+   virtual user_script*
+   replace_user_script(user_script const& old_script, std::string_view new_script_code);
+   virtual void remove_all_user_scripts(std::list<user_script> const& scripts)              = 0;
+   virtual bool are_user_scripts_equal(user_script const& first, user_script const& second) = 0;
 
    void        replace_bind_script();
    void        add_init_script(std::string_view post_fn);

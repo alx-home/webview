@@ -23,13 +23,11 @@
  * SOFTWARE.
  */
 
-#ifndef WEBVIEW_DETAIL_EXCEPTIONS_HH
-#define WEBVIEW_DETAIL_EXCEPTIONS_HH
+#pragma once
 
 #include <stdexcept>
-#if defined(__cplusplus) && !defined(WEBVIEW_HEADER)
-
-#    include <exception>
+#include <string_view>
+#include <exception>
 
 namespace webview {
 
@@ -37,17 +35,14 @@ class bad_access : public std::runtime_error {};
 
 namespace binding {
 class duplicate : public std::runtime_error {
-    explicit duplicate(std::string_view name)
-          : std::runtime_error(("Binding " + std::string{name} + " already exists !").c_str()) {}
+   explicit duplicate(std::string_view name)
+      : std::runtime_error(("Binding " + std::string{name} + " already Exists !").c_str()) {}
 };
 
 class not_found : public std::runtime_error {
-    explicit not_found(std::string_view name)
-          : std::runtime_error(("Binding " + std::string{name} + " not found !").c_str()) {}
+   explicit not_found(std::string_view name)
+      : std::runtime_error(("Binding " + std::string{name} + " not found !").c_str()) {}
 };
 }  // namespace binding
 
 }  // namespace webview
-
-#endif  // defined(__cplusplus) && !defined(WEBVIEW_HEADER)
-#endif  // WEBVIEW_DETAIL_EXCEPTIONS_HH

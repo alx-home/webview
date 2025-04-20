@@ -45,17 +45,22 @@ Webview::navigate(std::string_view url) {
 void
 Webview::unbind(std::string_view name) {
    if (bindings_.erase(std::string{name}) != 1) {
-      throw exception(error_info{error_t::WEBVIEW_ERROR_NOT_FOUND, std::string{"trying to unbind undefined binding "} + std::string{name}});
+      throw exception(error_info{
+         error_t::WEBVIEW_ERROR_NOT_FOUND,
+         std::string{"trying to unbind undefined binding "} + std::string{name}
+      });
    }
 
    replace_bind_script();
 
    // Notify that a binding was created if the init script has already
    // set things up.
-   eval(std::format(R"(if (window.__webview__) {{
+   eval(std::format(
+      R"(if (window.__webview__) {{
     window.__webview__.onUnbind({})
 }})",
-                    js::serialize(name)));
+      js::serialize(name)
+   ));
 }
 
 void
@@ -74,7 +79,7 @@ Webview::replace_user_script(const user_script& old_script, std::string_view new
    user_script* old_script_ptr{};
    for (auto& script : user_scripts_) {
       auto is_old_script = are_user_scripts_equal(script, old_script);
-      script             = add_user_script_impl(is_old_script ? new_script_code : script.get_code());
+      script = add_user_script_impl(is_old_script ? new_script_code : script.get_code());
       if (is_old_script) {
          old_script_ptr = std::addressof(script);
       }
@@ -98,7 +103,8 @@ Webview::add_init_script(std::string_view post_fn) {
 
 std::string
 Webview::create_init_script(std::string_view post_fn) {
-   return std::format(R"(
+   return std::format(
+      R"(
 (function() {{
    'use strict';
 
@@ -157,7 +163,7 @@ Webview::create_init_script(std::string_view post_fn) {
 
       Webview_.prototype.onBind = function(name) {{
          if (window.hasOwnProperty(name)) {{
-            throw new Error('Property \"' + name + '\" already exists');
+            throw new Error('Property \"' + name + '\" already Exists');
          }}
 
          window[name] = (function() {{
@@ -178,7 +184,8 @@ Webview::create_init_script(std::string_view post_fn) {
   
    window.__webview__ = new Webview();
 }})())",
-                      post_fn);
+      post_fn
+   );
 }
 
 std::string
@@ -195,7 +202,8 @@ Webview::create_bind_script() {
    }
    js_names += "]";
 
-   return std::format(R"((function() {{
+   return std::format(
+      R"((function() {{
     'use strict';
     var methods = {};
 
@@ -203,7 +211,8 @@ Webview::create_bind_script() {
         window.__webview__.onBind(name);
     }});
 }})())",
-                      js_names);
+      js_names
+   );
 }
 
 struct message_t {
@@ -224,13 +233,13 @@ Webview::on_message(std::string_view msg_) {
 
    auto const& create_promise = bindings_.at(std::string{msg.name_});
 
-   dispatch([create_promise, msg = std::move(msg)]() {
-      (*create_promise)(msg.id_, msg.params_);
-   });
+   dispatch([create_promise, msg = std::move(msg)]() { (*create_promise)(msg.id_, msg.params_); });
 }
 
 void
-Webview::on_window_created() { inc_window_count(); }
+Webview::on_window_created() {
+   inc_window_count();
+}
 
 void
 Webview::on_window_destroyed(bool skip_termination) {
@@ -246,7 +255,9 @@ Webview::window_ref_count() {
 }
 
 unsigned int
-Webview::inc_window_count() { return ++window_ref_count(); }
+Webview::inc_window_count() {
+   return ++window_ref_count();
+}
 
 unsigned int
 Webview::dec_window_count() {
