@@ -68,7 +68,7 @@ namespace detail {
  * different concurrency model.
  */
 class com_init_wrapper {
-   public:
+public:
    com_init_wrapper() = default;
 
    explicit com_init_wrapper(DWORD dwCoInit) {
@@ -82,12 +82,14 @@ class com_init_wrapper {
             m_initialized = true;
             break;
          case RPC_E_CHANGED_MODE:
-            throw exception{
+            throw Exception{
                error_t::WEBVIEW_ERROR_INVALID_STATE,
                "CoInitializeEx already called with a different concurrency model"
             };
          default:
-            throw exception{error_t::WEBVIEW_ERROR_UNSPECIFIED, "Unexpected result from CoInitializeEx"};
+            throw Exception{
+               error_t::WEBVIEW_ERROR_UNSPECIFIED, "Unexpected result from CoInitializeEx"
+            };
       }
    }
 
@@ -101,9 +103,7 @@ class com_init_wrapper {
    com_init_wrapper(const com_init_wrapper& other)            = delete;
    com_init_wrapper& operator=(const com_init_wrapper& other) = delete;
 
-   com_init_wrapper(com_init_wrapper&& other) noexcept {
-      *this = std::move(other);
-   }
+   com_init_wrapper(com_init_wrapper&& other) noexcept { *this = std::move(other); }
 
    com_init_wrapper& operator=(com_init_wrapper&& other) noexcept {
       if (this == &other) {
@@ -114,7 +114,7 @@ class com_init_wrapper {
       return *this;
    }
 
-   private:
+private:
    bool m_initialized = false;
 };
 

@@ -86,8 +86,7 @@ private:
 class cocoa_wkwebview_engine : public engine_base {
 public:
   cocoa_wkwebview_engine(bool debug, void *window)
-      : m_debug{debug},
-        m_window{static_cast<id>(window)},
+      : m_debug{debug}, m_window{static_cast<id>(window)},
         m_owns_window{!window} {
     auto app = get_shared_application();
     // See comments related to application lifecycle in create_app_delegate().
@@ -105,9 +104,9 @@ public:
         objc::msg_send<void>(app, "setDelegate:"_sel, m_app_delegate);
 
         // Start the main run loop so that the app delegate gets the
-        // NSApplicationDidFinishLaunchingNotification notification after the run
-        // loop has started in order to perform further initialization.
-        // We need to return from this constructor so this run loop is only
+        // NSApplicationDidFinishLaunchingNotification notification after the
+        // run loop has started in order to perform further initialization. We
+        // need to return from this constructor so this run loop is only
         // temporary.
         // Skip the main loop if this isn't the first instance of this class
         // because the launch event is only sent once. Instead, proceed to
@@ -150,7 +149,7 @@ public:
         // destruction.
         objc::msg_send<void>(m_window, "setDelegate:"_sel, nullptr);
         objc::msg_send<void>(m_window, "close"_sel);
-        on_window_destroyed(true);
+        OnWindowDestroyed(true);
       }
       m_window = nullptr;
     }
@@ -167,7 +166,7 @@ public:
     }
     if (m_owns_window) {
       // Needed for the window to close immediately.
-      deplete_run_loop_event_queue();
+      DepleteRunLoopEventQueue();
     }
     // TODO: Figure out why m_manager is still alive after the autoreleasepool
     // has been drained.
@@ -178,21 +177,21 @@ protected:
     if (m_window) {
       return m_window;
     }
-    return error_info{WEBVIEW_ERROR_INVALID_STATE};
+    return ErrorInfo{WEBVIEW_ERROR_INVALID_STATE};
   }
 
   result<void *> widget_impl() override {
     if (m_widget) {
       return m_widget;
     }
-    return error_info{WEBVIEW_ERROR_INVALID_STATE};
+    return ErrorInfo{WEBVIEW_ERROR_INVALID_STATE};
   }
 
   result<void *> browser_controller_impl() override {
     if (m_webview) {
       return m_webview;
     }
-    return error_info{WEBVIEW_ERROR_INVALID_STATE};
+    return ErrorInfo{WEBVIEW_ERROR_INVALID_STATE};
   }
 
   noresult terminate_impl() override {
@@ -254,7 +253,7 @@ protected:
 
     return {};
   }
-  noresult navigate_impl(const std::string &url) override {
+  noresult NavigateImpl(const std::string &url) override {
     objc::autoreleasepool arp;
 
     auto nsurl = objc::msg_send<id>(
@@ -292,7 +291,7 @@ protected:
     return {};
   }
 
-  user_script add_user_script_impl(const std::string &js) override {
+  user_script AddUserScriptImpl(const std::string &js) override {
     objc::autoreleasepool arp;
     auto wk_script = objc::msg_send<id>(
         objc::msg_send<id>("WKUserScript"_cls, "alloc"_sel),
@@ -301,7 +300,7 @@ protected:
                            js.c_str()),
         WKUserScriptInjectionTimeAtDocumentStart, YES);
     // Script is retained when added.
-    objc::msg_send<void>(m_manager, "addUserScript:"_sel, wk_script);
+    objc::msg_send<void>(m_manager, "AddUserScript:"_sel, wk_script);
     user_script script{
         js, user_script::impl_ptr{new user_script::impl{wk_script},
                                   [](user_script::impl *p) { delete p; }}};
@@ -362,7 +361,7 @@ private:
           cls, "userContentController:didReceiveScriptMessage:"_sel,
           (IMP)(+[](id self, SEL, id, id msg) {
             auto w = get_associated_webview(self);
-            w->on_message(objc::msg_send<const char *>(
+            w->OnMessage(objc::msg_send<const char *>(
                 objc::msg_send<id>(msg, "body"_sel), "UTF8String"_sel));
           }),
           "v@:@@");
@@ -498,7 +497,7 @@ private:
     m_widget = nullptr;
     m_webview = nullptr;
     m_window = nullptr;
-    dispatch([this] { on_window_destroyed(); });
+    Dispatch([this] { OnWindowDestroyed(); });
   }
   void set_up_window() {
     objc::autoreleasepool arp;
@@ -516,7 +515,7 @@ private:
                                OBJC_ASSOCIATION_ASSIGN);
       objc::msg_send<void>(m_window, "setDelegate:"_sel, m_window_delegate);
 
-      on_window_created();
+      OnWindowCreated();
     }
 
     set_up_web_view();
@@ -557,7 +556,8 @@ private:
 #if __has_builtin(__builtin_available)
     if (__builtin_available(macOS 10.13, *)) {
       // Equivalent Obj-C:
-      // [[config preferences] setValue:@YES forKey:@"javaScriptCanAccessClipboard"];
+      // [[config preferences] setValue:@YES
+      // forKey:@"javaScriptCanAccessClipboard"];
       objc::msg_send<id>(preferences, "setValue:forKey:"_sel, yes_value,
                          "javaScriptCanAccessClipboard"_str);
 
@@ -613,17 +613,19 @@ private:
     objc::msg_send<void>(m_manager, "addScriptMessageHandler:name:"_sel,
                          script_message_handler, "__webview__"_str);
 
-    add_init_script("function(message) {\n\
+    AddInitScript("function(message) {\n\
   return window.webkit.messageHandlers.__webview__.postMessage(message);\n\
 }");
   }
   void set_up_widget() {
     objc::autoreleasepool arp;
-    // Create a new view that can contain both the web view and the Web Inspector pane
+    // Create a new view that can contain both the web view and the Web
+    // Inspector pane
     m_widget = objc::msg_send<id>("NSView"_cls, "alloc"_sel);
     objc::msg_send<void>(m_widget, "initWithFrame:"_sel,
                          CGRectMake(0, 0, 0, 0));
-    // Autoresizing is needed because the Web Inspector pane is a sibling of the web view
+    // Autoresizing is needed because the Web Inspector pane is a sibling of the
+    // web view
     objc::msg_send<void>(m_widget, "setAutoresizesSubviews:"_sel, YES);
     objc::msg_send<void>(m_widget, "addSubview:"_sel, m_webview);
     objc::msg_send<void>(m_webview, "setFrame:"_sel,
@@ -654,11 +656,11 @@ private:
   }
 
   // Blocks while depleting the run loop of events.
-  void deplete_run_loop_event_queue() {
+  void DepleteRunLoopEventQueue() {
     objc::autoreleasepool arp;
     auto app = get_shared_application();
     bool done{};
-    dispatch([&] { done = true; });
+    Dispatch([&] { done = true; });
     auto mask = NSUIntegerMax; // NSEventMaskAny
     // NSDefaultRunLoopMode
     auto mode = objc::msg_send<id>("NSString"_cls, "stringWithUTF8String:"_sel,

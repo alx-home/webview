@@ -66,15 +66,14 @@ is_per_monitor_v2_awareness_available() {
 }
 
 inline bool
-enable_dpi_awareness() {
+EnableDpiAwareness() {
    auto user32 = native_library(L"user32.dll");
    if (auto fn = user32.get(user32_symbols::SetProcessDpiAwarenessContext)) {
-      auto dpi_awareness =
-         reinterpret_cast<user32_symbols::DPI_AWARENESS_CONTEXT>(
-            is_per_monitor_v2_awareness_available()
-               ? user32_symbols::dpi_awareness::per_monitor_v2_aware
-               : user32_symbols::dpi_awareness::per_monitor_aware
-         );
+      auto dpi_awareness = reinterpret_cast<user32_symbols::DPI_AWARENESS_CONTEXT>(
+         is_per_monitor_v2_awareness_available()
+            ? user32_symbols::dpi_awareness::per_monitor_v2_aware
+            : user32_symbols::dpi_awareness::per_monitor_aware
+      );
       if (fn(dpi_awareness)) {
          return true;
       }
@@ -127,7 +126,7 @@ get_default_window_dpi() {
 }
 
 inline int
-get_window_dpi(HWND window) {
+GetWindowDpi(HWND window) {
    auto user32 = native_library(L"user32.dll");
    if (auto fn = user32.get(user32_symbols::GetDpiForWindow)) {
       auto dpi = static_cast<int>(fn(window));
@@ -142,12 +141,14 @@ scale_value_for_dpi(int value, int from_dpi, int to_dpi) {
 }
 
 constexpr SIZE
-scale_size(int width, int height, int from_dpi, int to_dpi) {
-   return {scale_value_for_dpi(width, from_dpi, to_dpi), scale_value_for_dpi(height, from_dpi, to_dpi)};
+ScaleSize(int width, int height, int from_dpi, int to_dpi) {
+   return {
+      scale_value_for_dpi(width, from_dpi, to_dpi), scale_value_for_dpi(height, from_dpi, to_dpi)
+   };
 }
 
 inline SIZE
-make_window_frame_size(HWND window, int width, int height, int dpi) {
+MakeWindowFrameSize(HWND window, int width, int height, int dpi) {
    auto style = GetWindowLong(window, GWL_STYLE);
    RECT r{0, 0, width, height};
    auto user32 = native_library(L"user32.dll");

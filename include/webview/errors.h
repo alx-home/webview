@@ -67,47 +67,47 @@ enum class error_t {
    WEBVIEW_ERROR_NOT_FOUND = 2
 };
 
-class error_info {
+class ErrorInfo {
 public:
-   error_info(error_t code, std::string_view message = {}) noexcept
+   ErrorInfo(error_t code, std::string_view message = {}) noexcept
       : code_{code}
       , message_{message} {}
-   error_info() = default;
+   ErrorInfo() = default;
 
-   error_t            code() const { return code_; }
-   std::string const& message() const { return message_; }
+   error_t            Code() const { return code_; }
+   std::string const& Message() const { return message_; }
 
 private:
    error_t     code_{error_t::WEBVIEW_ERROR_UNSPECIFIED};
    std::string message_;
 };
 
-class exception : public std::exception {
+class Exception : public std::exception {
 public:
-   exception(error_t code, std::string_view message, std::exception_ptr cause) noexcept
-      : exception{error_info{code, message}, cause} {}
+   Exception(error_t code, std::string_view message, std::exception_ptr cause) noexcept
+      : Exception{ErrorInfo{code, message}, cause} {}
 
-   exception(error_t code, std::string_view message) noexcept
-      : exception{error_info{code, message}} {}
+   Exception(error_t code, std::string_view message) noexcept
+      : Exception{ErrorInfo{code, message}} {}
 
-   exception(error_info error, std::exception_ptr cause) noexcept
+   Exception(ErrorInfo error, std::exception_ptr cause) noexcept
       : error_{error}
       ,
       // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
       cause_{cause} {}
 
-   explicit exception(error_info error) noexcept
+   explicit Exception(ErrorInfo error) noexcept
       : error_{error} {}
 
-   exception() = default;
+   Exception() = default;
 
-   error_info const&  error() const { return error_; }
+   ErrorInfo const&   error() const { return error_; }
    std::exception_ptr cause() const { return cause_; }
 
-   const char* what() const noexcept override { return error_.message().c_str(); }
+   const char* what() const noexcept override { return error_.Message().c_str(); }
 
 private:
-   error_info         error_{error_t::WEBVIEW_ERROR_UNSPECIFIED};
+   ErrorInfo          error_{error_t::WEBVIEW_ERROR_UNSPECIFIED};
    std::exception_ptr cause_;
 };
 

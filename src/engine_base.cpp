@@ -29,57 +29,66 @@
 #include "errors.h"
 
 #include <format>
+#include <utility>
 #include <json/json.h>
 
 namespace webview {
 
+bool
+Bounds::Contains(Pos const& pos) const {
+   return (pos.x_ >= x_) && (pos.x_ <= x_ + width_) && (pos.y_ >= y_) && (pos.y_ <= y_ + height_);
+}
+
+Webview::Webview(std::function<void()> on_terminate)
+   : on_terminate_(std::move(on_terminate)) {}
+
 void
-Webview::navigate(std::string_view url) {
+Webview::Navigate(std::string_view url) {
    if (url.empty()) {
-      return navigate_impl("about:blank");
+      return NavigateImpl("about:blank");
    }
 
-   return navigate_impl(url);
+   return NavigateImpl(url);
 }
 
 void
-Webview::unbind(std::string_view name) {
+Webview::Unbind(std::string_view name) {
    if (bindings_.erase(std::string{name}) != 1) {
-      throw exception(error_info{
+      throw Exception(ErrorInfo{
          error_t::WEBVIEW_ERROR_NOT_FOUND,
          std::string{"trying to unbind undefined binding "} + std::string{name}
       });
    }
 
-   replace_bind_script();
+   ReplaceBindScript();
 
    // Notify that a binding was created if the init script has already
    // set things up.
-   eval(std::format(
+   Eval(std::format(
       R"(if (window.__webview__) {{
     window.__webview__.onUnbind({})
 }})",
-      js::serialize(name)
+      js::Serialize(name)
    ));
 }
 
 void
-Webview::init(std::string_view js) {
-   add_user_script(js);
+Webview::Init(std::string_view js) {
+   AddUserScript(js);
 }
 
 user_script*
-Webview::add_user_script(std::string_view js) {
-   return std::addressof(*user_scripts_.emplace(user_scripts_.end(), add_user_script_impl(js)));
+Webview::AddUserScript(std::string_view js) {
+   return std::addressof(*user_scripts_.emplace(user_scripts_.end(), AddUserScriptImpl(js)));
 }
 
 user_script*
-Webview::replace_user_script(const user_script& old_script, std::string_view new_script_code) {
-   remove_all_user_scripts(user_scripts_);
+Webview::ReplaceUserScript(const user_script& old_script, std::string_view new_script_code) {
+   RemoveAllUserScript(user_scripts_);
    user_script* old_script_ptr{};
    for (auto& script : user_scripts_) {
-      auto is_old_script = are_user_scripts_equal(script, old_script);
-      script = add_user_script_impl(is_old_script ? new_script_code : script.get_code());
+      auto is_old_script = AreUserScriptsEqual(script, old_script);
+      script             = AddUserScriptImpl(is_old_script ? new_script_code : script.GetCode());
       if (is_old_script) {
          old_script_ptr = std::addressof(script);
       }
@@ -88,21 +97,21 @@ Webview::replace_user_script(const user_script& old_script, std::string_view new
 }
 
 void
-Webview::replace_bind_script() {
+Webview::ReplaceBindScript() {
    if (bind_script_) {
-      bind_script_ = replace_user_script(*bind_script_, create_bind_script());
+      bind_script_ = ReplaceUserScript(*bind_script_, CreateBindScript());
    } else {
-      bind_script_ = add_user_script(create_bind_script());
+      bind_script_ = AddUserScript(CreateBindScript());
    }
 }
 
 void
-Webview::add_init_script(std::string_view post_fn) {
-   add_user_script(create_init_script(post_fn));
+Webview::AddInitScript(std::string_view post_fn) {
+   AddUserScript(CreateInitScript(post_fn));
 }
 
 std::string
-Webview::create_init_script(std::string_view post_fn) {
+Webview::CreateInitScript(std::string_view post_fn) {
    return std::format(
       R"(
 (function() {{
@@ -149,7 +158,7 @@ Webview::create_init_script(std::string_view post_fn) {
             try {{
                result = JSON.parse(result);
             }} catch (e) {{
-               promise.reject(new Error("Failed to parse binding result as JSON"));
+               promise.reject(new Error("Failed to Parse binding result as JSON"));
                return;
             }}
          }}
@@ -189,7 +198,7 @@ Webview::create_init_script(std::string_view post_fn) {
 }
 
 std::string
-Webview::create_bind_script() {
+Webview::CreateBindScript() {
    std::string js_names = "[";
    bool        first    = true;
    for (const auto& binding : bindings_) {
@@ -198,7 +207,7 @@ Webview::create_bind_script() {
       } else {
          js_names += ",";
       }
-      js_names += js::serialize(binding.first);
+      js_names += js::Serialize(binding.first);
    }
    js_names += "]";
 
@@ -215,53 +224,55 @@ Webview::create_bind_script() {
    );
 }
 
-struct message_t {
+struct Message {
    std::string id_;
    std::string name_;
    std::string params_;
 
-   static constexpr js::Proto prototype{
-      js::_{"id", &message_t::id_},
-      js::_{"method", &message_t::name_},
-      js::_{"params", &message_t::params_}
+   static constexpr js::Proto PROTOTYPE{
+      js::_{"id", &Message::id_},
+      js::_{"method", &Message::name_},
+      js::_{"params", &Message::params_}
    };
 };
 
 void
-Webview::on_message(std::string_view msg_) {
-   auto msg = js::parse<message_t>(msg_);
+Webview::OnMessage(std::string_view msg_) {
+   auto msg = js::Parse<Message>(msg_);
 
    auto const& create_promise = bindings_.at(std::string{msg.name_});
 
-   dispatch([create_promise, msg = std::move(msg)]() { (*create_promise)(msg.id_, msg.params_); });
+   Dispatch([create_promise, msg = std::move(msg)]() { (*create_promise)(msg.id_, msg.params_); });
 }
 
 void
-Webview::on_window_created() {
-   inc_window_count();
+Webview::OnWindowCreated() {
+   IncWindowCount();
 }
 
 void
-Webview::on_window_destroyed(bool skip_termination) {
-   if ((dec_window_count() <= 0) && !skip_termination) {
-      terminate();
+Webview::OnWindowDestroyed(bool skip_termination) {
+   if ((DecWindowCount() <= 0) && !skip_termination) {
+      Terminate();
    }
+
+   on_terminate_();
 }
 
 std::atomic_uint&
-Webview::window_ref_count() {
-   static std::atomic_uint ref_count{0};
-   return ref_count;
+Webview::WindowRefCount() {
+   static std::atomic_uint s__ref_count{0};
+   return s__ref_count;
 }
 
 unsigned int
-Webview::inc_window_count() {
-   return ++window_ref_count();
+Webview::IncWindowCount() {
+   return ++WindowRefCount();
 }
 
 unsigned int
-Webview::dec_window_count() {
-   auto& count = window_ref_count();
+Webview::DecWindowCount() {
+   auto& count = WindowRefCount();
    if (count > 0) {
       return --count;
    }

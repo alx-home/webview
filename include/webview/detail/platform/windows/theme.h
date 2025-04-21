@@ -41,9 +41,8 @@ namespace detail {
 
 inline bool
 is_dark_theme_enabled() {
-   constexpr auto* sub_key =
-      L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
-   reg_key key(HKEY_CURRENT_USER, sub_key, 0, KEY_READ);
+   constexpr auto* sub_key = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
+   reg_key         key(HKEY_CURRENT_USER, sub_key, 0, KEY_READ);
    if (!key.is_open()) {
       // Default is light theme
       return false;
@@ -52,7 +51,7 @@ is_dark_theme_enabled() {
 }
 
 inline void
-apply_window_theme(HWND window) {
+ApplyWindowTheme(HWND window) {
    auto dark_theme_enabled = is_dark_theme_enabled();
 
    // Use "immersive dark mode" on systems that support it.
@@ -61,7 +60,11 @@ apply_window_theme(HWND window) {
    static native_library dwmapi{L"dwmapi.dll"};
    if (auto fn = dwmapi.get(dwmapi_symbols::DwmSetWindowAttribute)) {
       // Try the modern, documented attribute before the older, undocumented one.
-      if (fn(window, dwmapi_symbols::DWMWA_USE_IMMERSIVE_DARK_MODE, &use_dark_mode, sizeof(use_dark_mode)) != S_OK) {
+      if (fn(window,
+             dwmapi_symbols::DWMWA_USE_IMMERSIVE_DARK_MODE,
+             &use_dark_mode,
+             sizeof(use_dark_mode))
+          != S_OK) {
          fn(window,
             dwmapi_symbols::DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_V10_0_19041,
             &use_dark_mode,

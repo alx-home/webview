@@ -35,6 +35,22 @@
 
 namespace webview {
 
+struct Pos {
+   int x_;
+   int y_;
+};
+
+struct Size {
+   int width_;
+   int height_;
+};
+
+struct Bounds
+   : Pos
+   , Size {
+   bool Contains(Pos const& pos) const;
+};
+
 /// Window size hints
 enum class Hint {
    /// Width and height are default size.
@@ -44,7 +60,9 @@ enum class Hint {
    /// Width and height are maximum bounds.
    MAX,
    /// Window size can not be changed by a user.
-   FIXED
+   FIXED,
+   /// Window without frame, user can't change size & position.
+   STATIC
 };
 
 using url_handler_t = std::function<http::response_t(http::request_t const& request)>;
@@ -52,59 +70,75 @@ using binding_t     = std::function<void(std::string_view id, std::string_view a
 
 class Webview {
 public:
+   Webview(std::function<void()> on_terminate = []() constexpr {});
    virtual ~Webview() = default;
 
-   void navigate(std::string_view url);
+   void Navigate(std::string_view url);
 
-   virtual void register_url_handler(std::string const& filter, url_handler_t&& handler) = 0;
+   virtual void RegisterUrlHandler(std::string const& filter, url_handler_t&& handler) = 0;
 
-   template <class Promise> void bind(std::string_view name, Promise&& promise);
-   void                          unbind(std::string_view name);
+   template <class PROMISE> void Bind(std::string_view name, PROMISE&& promise);
+   void                          Unbind(std::string_view name);
 
-   virtual void run()                               = 0;
-   virtual void terminate()                         = 0;
-   virtual void dispatch(std::function<void()>&& f) = 0;
-   virtual void set_title(std::string_view title)   = 0;
+   virtual void Run()                               = 0;
+   virtual void Terminate()                         = 0;
+   virtual void Dispatch(std::function<void()>&& f) = 0;
+   virtual void SetTitle(std::string_view title)    = 0;
 
-   virtual void set_size(int width, int height, Hint hints) = 0;
-   virtual void set_html(std::string_view html)             = 0;
+   virtual void SetSize(int width, int height, Hint hints) = 0;
+   virtual void SetPos(int x, int y)                       = 0;
+   virtual void SetHtml(std::string_view html)             = 0;
 
-   void init(std::string_view js);
+   virtual int Width() const  = 0;
+   virtual int Height() const = 0;
 
-   virtual void eval(std::string_view js) = 0;
-   virtual void open_dev_tools()          = 0;
+   virtual Size   GetSize() const   = 0;
+   virtual Pos    GetPos() const    = 0;
+   virtual Bounds GetBounds() const = 0;
+
+   virtual void ToForeground() = 0;
+
+   virtual void Hide()    = 0;
+   virtual void Restore() = 0;
+   virtual void Show()    = 0;
+
+   void Init(std::string_view js);
+
+   virtual void Eval(std::string_view js) = 0;
+   virtual void OpenDevTools()            = 0;
    virtual void InstallResourceHandler()  = 0;
 
-   virtual user_script* add_user_script(std::string_view js);
+   virtual user_script* AddUserScript(std::string_view js);
 
 protected:
-   virtual void navigate_impl(std::string_view url) = 0;
+   virtual void NavigateImpl(std::string_view url) = 0;
 
-   virtual user_script add_user_script_impl(std::string_view js) = 0;
+   virtual user_script AddUserScriptImpl(std::string_view js) = 0;
    virtual user_script*
-   replace_user_script(user_script const& old_script, std::string_view new_script_code);
-   virtual void remove_all_user_scripts(std::list<user_script> const& scripts)              = 0;
-   virtual bool are_user_scripts_equal(user_script const& first, user_script const& second) = 0;
+                ReplaceUserScript(user_script const& old_script, std::string_view new_script_code);
+   virtual void RemoveAllUserScript(std::list<user_script> const& scripts)               = 0;
+   virtual bool AreUserScriptsEqual(user_script const& first, user_script const& second) = 0;
 
-   void        replace_bind_script();
-   void        add_init_script(std::string_view post_fn);
-   std::string create_init_script(std::string_view post_fn);
-   std::string create_bind_script();
+   void        ReplaceBindScript();
+   void        AddInitScript(std::string_view post_fn);
+   std::string CreateInitScript(std::string_view post_fn);
+   std::string CreateBindScript();
 
-   virtual void on_message(std::string_view msg);
-   virtual void on_window_created();
+   virtual void OnMessage(std::string_view msg);
+   virtual void OnWindowCreated();
 
-   virtual void on_window_destroyed(bool skip_termination = false);
+   virtual void OnWindowDestroyed(bool skip_termination = false);
 
 private:
-   static std::atomic_uint& window_ref_count();
-   static unsigned int      inc_window_count();
-   static unsigned int      dec_window_count();
+   static std::atomic_uint& WindowRefCount();
+   static unsigned int      IncWindowCount();
+   static unsigned int      DecWindowCount();
 
    using bindings_t = std::unordered_map<std::string, std::shared_ptr<binding_t>>;
    bindings_t             bindings_{};
    user_script*           bind_script_{};
    std::list<user_script> user_scripts_;
+   std::function<void()>  on_terminate_;
 };
 
 }  // namespace webview

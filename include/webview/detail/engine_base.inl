@@ -38,102 +38,181 @@
 
 namespace webview {
 
-template <class Promise>
+template <class PROMISE>
 void
-Webview::bind(std::string_view name, Promise&& promise) {
+Webview::Bind(std::string_view name, PROMISE&& promise) {
    if (!bindings_
            .emplace(
               name,
-              std::make_shared<binding_t>([this, promise = std::forward<Promise>(promise)](std::string_view id, std::string_view js_args) {
+              std::make_shared<binding_t>([this, promise = std::forward<PROMISE>(promise)](
+                                             std::string_view id, std::string_view js_args
+                                          ) {
                  using return_t = promise::return_t<promise::return_t<decltype(promise)>>;
                  using args_t   = promise::args_t<decltype(promise)>;
 
                  try {
                     auto args = [&]() constexpr {
                        if constexpr (std::tuple_size_v<args_t>) {
-                          return js::parse<args_t>(js_args);
+                          return js::Parse<args_t>(js_args);
                        } else {
                           return std::tuple{};
                        }
                     }();
 
-                    std::apply([&]<class... Args>(Args&&... args) constexpr {
-                       if constexpr (std::is_void_v<return_t>) {
-                          make_promise(promise, std::forward<Args>(args)...)
-                             .then([id = std::string{id}, this]() -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 0, undefined)");
-                                });
-                             })
-                             .catch_([id = std::string{id}, this](js::serializable_exception const& exc) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), exception = exc.serialize(), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize(exception) + ")");
-                                });
-                             })
-                             .catch_([id = std::string{id}, this](std::exception const& exc) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), exception = js::serialize<std::string_view>(exc.what()), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize(exception) + ")");
-                                });
-                             })
-                             .catch_([id = std::string{id}, this](std::exception_ptr) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize<std::string_view>(R"("unknown exception")") + ")");
-                                });
-                             })
-                             .detach();
+                    std::apply(
+                       [&]<class... ARGS>(ARGS&&... args) constexpr {
+                          if constexpr (std::is_void_v<return_t>) {
+                             MakePromise(promise, std::forward<ARGS>(args)...)
+                                .Then([id = std::string{id}, this]() -> ::Promise<void> {
+                                   co_return Dispatch([id = js::Serialize(id), this]() {
+                                      Eval("window.__webview__.onReply(" + id + ", 0, undefined)");
+                                   });
+                                })
+                                .Catch(
+                                   [id = std::string{id},
+                                    this](js::SerializableException const& exc) -> ::Promise<void> {
+                                      co_return Dispatch([id        = js::Serialize(id),
+                                                          exception = exc.Serialize(),
+                                                          this]() {
+                                         Eval(
+                                            "window.__webview__.onReply(" + id + ", 1, "
+                                            + js::Serialize(exception) + ")"
+                                         );
+                                      });
+                                   }
+                                )
+                                .Catch(
+                                   [id = std::string{id},
+                                    this](std::exception const& exc) -> ::Promise<void> {
+                                      co_return Dispatch(
+                                         [id        = js::Serialize(id),
+                                          exception = js::Serialize<std::string_view>(exc.what()),
+                                          this]() {
+                                            Eval(
+                                               "window.__webview__.onReply(" + id + ", 1, "
+                                               + js::Serialize(exception) + ")"
+                                            );
+                                         }
+                                      );
+                                   }
+                                )
+                                .Catch(
+                                   [id = std::string{id},
+                                    this](std::exception_ptr) -> ::Promise<void> {
+                                      co_return Dispatch([id = js::Serialize(id), this]() {
+                                         Eval(
+                                            "window.__webview__.onReply(" + id + ", 1, "
+                                            + js::Serialize<std::string_view>(
+                                               R"("unknown exception")"
+                                            )
+                                            + ")"
+                                         );
+                                      });
+                                   }
+                                )
+                                .Detach();
 
-                       } else {
-                          make_promise(promise, std::forward<Args>(args)...)
-                             .then([id{std::string{id}}, this](return_t const& result) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), result = js::serialize(result), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 0, " + js::serialize(result) + ")");
-                                });
-                             })
-                             .catch_([id{std::string{id}}, this](js::serializable_exception const& exc) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), exception = exc.serialize(), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize(exception) + ")");
-                                });
-                             })
-                             .catch_([id = std::string{id}, this](std::exception const& exc) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), exception = js::serialize<std::string_view>(exc.what()), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize(exception) + ")");
-                                });
-                             })
-                             .catch_([id = std::string{id}, this](std::exception_ptr) -> ::Promise<void> {
-                                co_return dispatch([id = js::serialize(id), this]() {
-                                   eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize<std::string_view>(R"("unknown exception")") + ")");
-                                });
-                             })
-                             .detach();
-                       }
-                    },
-                               args);
-                 } catch (js::serializable_exception const& exc) {
-                    dispatch([id = js::serialize(id), exception = exc.serialize(), this]() {
-                       eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize(exception) + ")");
+                          } else {
+                             MakePromise(promise, std::forward<ARGS>(args)...)
+                                .Then(
+                                   [id{std::string{id}},
+                                    this](return_t const& result) -> ::Promise<void> {
+                                      co_return Dispatch([id     = js::Serialize(id),
+                                                          result = js::Serialize(result),
+                                                          this]() {
+                                         Eval(
+                                            "window.__webview__.onReply(" + id + ", 0, "
+                                            + js::Serialize(result) + ")"
+                                         );
+                                      });
+                                   }
+                                )
+                                .Catch(
+                                   [id{std::string{id}},
+                                    this](js::SerializableException const& exc) -> ::Promise<void> {
+                                      co_return Dispatch([id        = js::Serialize(id),
+                                                          exception = exc.Serialize(),
+                                                          this]() {
+                                         Eval(
+                                            "window.__webview__.onReply(" + id + ", 1, "
+                                            + js::Serialize(exception) + ")"
+                                         );
+                                      });
+                                   }
+                                )
+                                .Catch(
+                                   [id = std::string{id},
+                                    this](std::exception const& exc) -> ::Promise<void> {
+                                      co_return Dispatch(
+                                         [id        = js::Serialize(id),
+                                          exception = js::Serialize<std::string_view>(exc.what()),
+                                          this]() {
+                                            Eval(
+                                               "window.__webview__.onReply(" + id + ", 1, "
+                                               + js::Serialize(exception) + ")"
+                                            );
+                                         }
+                                      );
+                                   }
+                                )
+                                .Catch(
+                                   [id = std::string{id},
+                                    this](std::exception_ptr) -> ::Promise<void> {
+                                      co_return Dispatch([id = js::Serialize(id), this]() {
+                                         Eval(
+                                            "window.__webview__.onReply(" + id + ", 1, "
+                                            + js::Serialize<std::string_view>(
+                                               R"("unknown exception")"
+                                            )
+                                            + ")"
+                                         );
+                                      });
+                                   }
+                                )
+                                .Detach();
+                          }
+                       },
+                       args
+                    );
+                 } catch (js::SerializableException const& exc) {
+                    Dispatch([id = js::Serialize(id), exception = exc.Serialize(), this]() {
+                       Eval(
+                          "window.__webview__.onReply(" + id + ", 1, " + js::Serialize(exception)
+                          + ")"
+                       );
                     });
                  } catch (std::exception const& exc) {
-                    dispatch([id = js::serialize(id), exception = js::serialize(std::string_view{exc.what()}), this]() {
-                       eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize(exception) + ")");
+                    Dispatch([id        = js::Serialize(id),
+                              exception = js::Serialize(std::string_view{exc.what()}),
+                              this]() {
+                       Eval(
+                          "window.__webview__.onReply(" + id + ", 1, " + js::Serialize(exception)
+                          + ")"
+                       );
                     });
                  } catch (...) {
-                    dispatch([id = js::serialize(id), this]() {
-                       eval("window.__webview__.onReply(" + id + ", 1, " + js::serialize<std::string_view>(R"("unknown exception")") + ")");
+                    Dispatch([id = js::Serialize(id), this]() {
+                       Eval(
+                          "window.__webview__.onReply(" + id + ", 1, "
+                          + js::Serialize<std::string_view>(R"("unknown exception")") + ")"
+                       );
                     });
                  }
               })
            )
            .second) {
-      throw exception(error_t::WEBVIEW_ERROR_DUPLICATE, name);
+      throw Exception(error_t::WEBVIEW_ERROR_DUPLICATE, name);
    }
 
-   replace_bind_script();
+   ReplaceBindScript();
 
    // Notify that a binding was created if the init script has already
    // set things up.
-   eval(std::format(R"(if (window.__webview__) {{
+   Eval(std::format(
+      R"(if (window.__webview__) {{
        window.__webview__.onBind({})
     }})",
-                    js::serialize(name)));
+      js::Serialize(name)
+   ));
 }
 }  // namespace webview

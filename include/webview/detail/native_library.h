@@ -28,8 +28,7 @@
 
 #if defined(__cplusplus) && !defined(WEBVIEW_HEADER)
 
-#   include "utility/string.h"
-
+#   include <utils/String.h>
 #   include <string>
 
 #   if defined(_WIN32)
@@ -45,8 +44,7 @@ namespace webview {
 namespace detail {
 
 // Holds a symbol name and associated type for code clarity.
-template <typename T>
-class library_symbol {
+template <typename T> class library_symbol {
 public:
    using type = T;
 
@@ -100,8 +98,7 @@ public:
    explicit operator bool() const { return is_loaded(); }
 
    // Get the address for the specified symbol or nullptr if not found.
-   template <typename Symbol>
-   typename Symbol::type get(const Symbol& symbol) const {
+   template <typename Symbol> typename Symbol::type get(const Symbol& symbol) const {
       if (is_loaded()) {
          // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
 #   ifdef _WIN32
@@ -110,17 +107,13 @@ public:
 #         pragma GCC diagnostic ignored "-Wcast-function-type"
 #      endif
          return reinterpret_cast<typename Symbol::type>(
-            reinterpret_cast<void*>(
-               GetProcAddress(m_handle, symbol.get_name())
-            )
+            reinterpret_cast<void*>(GetProcAddress(m_handle, symbol.get_name()))
          );
 #      ifdef __GNUC__
 #         pragma GCC diagnostic pop
 #      endif
 #   else
-         return reinterpret_cast<typename Symbol::type>(
-            dlsym(m_handle, symbol.get_name())
-         );
+         return reinterpret_cast<typename Symbol::type>(dlsym(m_handle, symbol.get_name()));
 #   endif
          // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
       }
@@ -135,7 +128,7 @@ public:
    // Returns true if the library by the given name is currently loaded; otherwise false.
    static inline bool is_loaded(const std::string& name) {
 #   ifdef _WIN32
-      auto handle = GetModuleHandleW(widen_string(name).c_str());
+      auto handle = GetModuleHandleW(utils::WidenString(name).c_str());
 #   else
       auto handle = dlopen(name.c_str(), RTLD_NOW | RTLD_NOLOAD);
       if (handle) {
@@ -154,7 +147,7 @@ private:
 
    static inline mod_handle_t load_library(const std::string& name) {
 #   ifdef _WIN32
-      return load_library(widen_string(name));
+      return load_library(utils::WidenString(name));
 #   else
       return dlopen(name.c_str(), RTLD_NOW);
 #   endif

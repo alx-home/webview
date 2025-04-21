@@ -89,20 +89,18 @@ get_last_native_path_component(const std::basic_string<T>& path) {
 #      endif  // WEBVIEW_MSWEBVIEW2_BUILTIN_IMPL
 
 namespace mswebview2 {
-static constexpr IID
-   IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler{
-      0x6C4819F3,
-      0xC9B7,
-      0x4260,
-      {0x81, 0x27, 0xC9, 0xF5, 0xBD, 0xE7, 0xF6, 0x8C}
-   };
-static constexpr IID
-   IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler{
-      0x4E8A3389,
-      0xC9D8,
-      0x4BD2,
-      {0xB6, 0xB5, 0x12, 0x4F, 0xEE, 0x6C, 0xC1, 0x4D}
-   };
+static constexpr IID IID_ICoreWebView2CreateCoreWebView2ControllerCompletedHandler{
+   0x6C4819F3,
+   0xC9B7,
+   0x4260,
+   {0x81, 0x27, 0xC9, 0xF5, 0xBD, 0xE7, 0xF6, 0x8C}
+};
+static constexpr IID IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler{
+   0x4E8A3389,
+   0xC9D8,
+   0x4BD2,
+   {0xB6, 0xB5, 0x12, 0x4F, 0xEE, 0x6C, 0xC1, 0x4D}
+};
 static constexpr IID IID_ICoreWebView2PermissionRequestedEventHandler{
    0x15E1C6A3,
    0xC72A,
@@ -115,48 +113,34 @@ static constexpr IID IID_ICoreWebView2WebMessageReceivedEventHandler{
    0x49FA,
    {0x8E, 0x07, 0x89, 0x8E, 0xA0, 0x1E, 0xCB, 0xD2}
 };
-static constexpr IID
-   IID_ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler{
-      0xB99369F3,
-      0x9B11,
-      0x47B5,
-      {0xBC, 0x6F, 0x8E, 0x78, 0x95, 0xFC, 0xEA, 0x17}
-   };
+static constexpr IID IID_ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler{
+   0xB99369F3,
+   0x9B11,
+   0x47B5,
+   {0xBC, 0x6F, 0x8E, 0x78, 0x95, 0xFC, 0xEA, 0x17}
+};
 
 #      if WEBVIEW_MSWEBVIEW2_BUILTIN_IMPL == 1
-enum class webview2_runtime_type { installed = 0,
-                                   embedded  = 1 };
+enum class webview2_runtime_type { installed = 0, embedded = 1 };
 
 namespace webview2_symbols {
 using CreateWebViewEnvironmentWithOptionsInternal_t =
-   HRESULT(STDMETHODCALLTYPE*)(
-      bool,
-      webview2_runtime_type,
-      PCWSTR,
-      IUnknown*,
-      ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*
-   );
+   HRESULT(STDMETHODCALLTYPE*)(bool, webview2_runtime_type, PCWSTR, IUnknown*, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*);
 using DllCanUnloadNow_t = HRESULT(STDMETHODCALLTYPE*)();
 
 static constexpr auto CreateWebViewEnvironmentWithOptionsInternal =
    library_symbol<CreateWebViewEnvironmentWithOptionsInternal_t>(
       "CreateWebViewEnvironmentWithOptionsInternal"
    );
-static constexpr auto DllCanUnloadNow =
-   library_symbol<DllCanUnloadNow_t>("DllCanUnloadNow");
+static constexpr auto DllCanUnloadNow = library_symbol<DllCanUnloadNow_t>("DllCanUnloadNow");
 }  // namespace webview2_symbols
 #      endif  // WEBVIEW_MSWEBVIEW2_BUILTIN_IMPL
 
 #      if WEBVIEW_MSWEBVIEW2_EXPLICIT_LINK == 1
 namespace webview2_symbols {
-using CreateCoreWebView2EnvironmentWithOptions_t = HRESULT(STDMETHODCALLTYPE*)(
-   PCWSTR,
-   PCWSTR,
-   ICoreWebView2EnvironmentOptions*,
-   ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*
-);
-using GetAvailableCoreWebView2BrowserVersionString_t =
-   HRESULT(STDMETHODCALLTYPE*)(PCWSTR, LPWSTR*);
+using CreateCoreWebView2EnvironmentWithOptions_t =
+   HRESULT(STDMETHODCALLTYPE*)(PCWSTR, PCWSTR, ICoreWebView2EnvironmentOptions*, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler*);
+using GetAvailableCoreWebView2BrowserVersionString_t = HRESULT(STDMETHODCALLTYPE*)(PCWSTR, LPWSTR*);
 
 static constexpr auto CreateCoreWebView2EnvironmentWithOptions =
    library_symbol<CreateCoreWebView2EnvironmentWithOptions_t>(
@@ -179,14 +163,14 @@ public:
    ) const {
 #      if WEBVIEW_MSWEBVIEW2_EXPLICIT_LINK == 1
       if (m_lib.is_loaded()) {
-         if (auto fn = m_lib.get(
-                webview2_symbols::CreateCoreWebView2EnvironmentWithOptions
-             )) {
+         if (auto fn = m_lib.get(webview2_symbols::CreateCoreWebView2EnvironmentWithOptions)) {
             return fn(browser_dir, user_data_dir, env_options, created_handler);
          }
       }
 #         if WEBVIEW_MSWEBVIEW2_BUILTIN_IMPL == 1
-      return create_environment_with_options_impl(browser_dir, user_data_dir, env_options, created_handler);
+      return create_environment_with_options_impl(
+         browser_dir, user_data_dir, env_options, created_handler
+      );
 #         else
       return S_FALSE;
 #         endif
@@ -198,12 +182,10 @@ public:
    }
 
    HRESULT
-   get_available_browser_version_string(PCWSTR browser_dir, LPWSTR* version) const {
+   GetAvailableBrowserVersionString(PCWSTR browser_dir, LPWSTR* version) const {
 #      if WEBVIEW_MSWEBVIEW2_EXPLICIT_LINK == 1
       if (m_lib.is_loaded()) {
-         if (auto fn = m_lib.get(
-                webview2_symbols::GetAvailableCoreWebView2BrowserVersionString
-             )) {
+         if (auto fn = m_lib.get(webview2_symbols::GetAvailableCoreWebView2BrowserVersionString)) {
             return fn(browser_dir, version);
          }
       }
@@ -227,7 +209,12 @@ private:
 
       client_info_t() = default;
 
-      client_info_t(bool found, std::wstring dll_path, std::wstring version, webview2_runtime_type runtime_type)
+      client_info_t(
+         bool                  found,
+         std::wstring          dll_path,
+         std::wstring          version,
+         webview2_runtime_type runtime_type
+      )
          : found{found}
          , dll_path{std::move(dll_path)}
          , version{std::move(version)}
@@ -245,9 +232,7 @@ private:
          return -1;
       }
       auto client_dll = native_library(found_client.dll_path);
-      if (auto fn = client_dll.get(
-             webview2_symbols::CreateWebViewEnvironmentWithOptionsInternal
-          )) {
+      if (auto fn = client_dll.get(webview2_symbols::CreateWebViewEnvironmentWithOptionsInternal)) {
          return fn(true, found_client.runtime_type, user_data_dir, env_options, created_handler);
       }
       if (auto fn = client_dll.get(webview2_symbols::DllCanUnloadNow)) {
@@ -267,9 +252,8 @@ private:
       if (!found_client.found) {
          return -1;
       }
-      auto info_length_bytes =
-         found_client.version.size() * sizeof(found_client.version[0]);
-      auto info = static_cast<LPWSTR>(CoTaskMemAlloc(info_length_bytes));
+      auto info_length_bytes = found_client.version.size() * sizeof(found_client.version[0]);
+      auto info              = static_cast<LPWSTR>(CoTaskMemAlloc(info_length_bytes));
       if (!info) {
          return -1;
       }
@@ -282,8 +266,7 @@ private:
       if (browser_dir) {
          return find_embedded_client(api_version, browser_dir);
       }
-      auto found_client =
-         find_installed_client(api_version, true, default_release_channel_guid);
+      auto found_client = find_installed_client(api_version, true, default_release_channel_guid);
       if (!found_client.found) {
          found_client = find_installed_client(api_version, false, default_release_channel_guid);
       }
@@ -312,8 +295,11 @@ private:
       return dll_path;
    }
 
-   client_info_t
-   find_installed_client(unsigned int min_api_version, bool system, const std::wstring& release_channel) const {
+   client_info_t find_installed_client(
+      unsigned int        min_api_version,
+      bool                system,
+      const std::wstring& release_channel
+   ) const {
       std::wstring sub_key = client_state_reg_sub_key;
       sub_key += release_channel;
       auto    root_key = system ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
@@ -323,16 +309,20 @@ private:
       }
       auto ebwebview_value = key.query_string(L"EBWebView");
 
-      auto client_version_string =
-         get_last_native_path_component(ebwebview_value);
-      auto client_version = parse_version(client_version_string);
+      auto client_version_string = get_last_native_path_component(ebwebview_value);
+      auto client_version        = parse_version(client_version_string);
       if (client_version[2] < min_api_version) {
          // Our API version is greater than the runtime API version.
          return {};
       }
 
       auto client_dll_path = make_client_dll_path(ebwebview_value);
-      return {true, std::move(client_dll_path), std::move(client_version_string), webview2_runtime_type::installed};
+      return {
+         true,
+         std::move(client_dll_path),
+         std::move(client_version_string),
+         webview2_runtime_type::installed
+      };
    }
 
    client_info_t find_embedded_client(unsigned int min_api_version, const std::wstring& dir) const {
@@ -345,7 +335,12 @@ private:
          return {};
       }
 
-      return {true, std::move(client_dll_path), std::move(client_version_string), webview2_runtime_type::embedded};
+      return {
+         true,
+         std::move(client_dll_path),
+         std::move(client_version_string),
+         webview2_runtime_type::embedded
+      };
    }
 
    // The minimum WebView2 API version we need regardless of the SDK release
@@ -359,8 +354,7 @@ private:
       L"SOFTWARE\\Microsoft\\EdgeUpdate\\ClientState\\";
 
    // GUID for the stable release channel.
-   static constexpr auto stable_release_guid =
-      L"{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+   static constexpr auto stable_release_guid = L"{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
 
    static constexpr auto default_release_channel_guid = stable_release_guid;
 #      endif  // WEBVIEW_MSWEBVIEW2_BUILTIN_IMPL
@@ -381,10 +375,9 @@ static constexpr auto environment_completed =
       IID_ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler
    };
 
-static constexpr auto message_received =
-   cast_info_t<ICoreWebView2WebMessageReceivedEventHandler>{
-      IID_ICoreWebView2WebMessageReceivedEventHandler
-   };
+static constexpr auto message_received = cast_info_t<ICoreWebView2WebMessageReceivedEventHandler>{
+   IID_ICoreWebView2WebMessageReceivedEventHandler
+};
 
 static constexpr auto permission_requested =
    cast_info_t<ICoreWebView2PermissionRequestedEventHandler>{
@@ -392,8 +385,7 @@ static constexpr auto permission_requested =
    };
 
 static constexpr auto add_script_to_execute_on_document_created_completed =
-   cast_info_t<
-      ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>{
+   cast_info_t<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>{
       IID_ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler
    };
 }  // namespace cast_info

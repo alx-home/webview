@@ -49,7 +49,7 @@ public:
 
    ~user_script() = default;
 
-   std::string const& get_code() const { return code_; }
+   std::string const& GetCode() const { return code_; }
 
    impl&       get_impl() { return *impl_; }
    impl const& get_impl() const { return *impl_; }
