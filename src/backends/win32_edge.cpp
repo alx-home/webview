@@ -273,13 +273,13 @@ Win32EdgeEngine::SetSchemesOption(
 }
 
 Win32EdgeEngine::Win32EdgeEngine(
-   bool                                                    debug,
-   HWND                                                    window,
-   Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options,
-   std::string_view                                        user_data_dir,
-   DWORD                                                   style,
-   DWORD                                                   exStyle,
-   std::function<void()>                                   on_terminate
+   bool                  debug,
+   HWND                  window,
+   WebviewOptions        options,
+   std::string_view      user_data_dir,
+   DWORD                 style,
+   DWORD                 exStyle,
+   std::function<void()> on_terminate
 )
    : Webview(std::move(on_terminate))
    , wuser_data_dir_{utils::WidenString(user_data_dir)}
@@ -557,17 +557,19 @@ Win32EdgeEngine::~Win32EdgeEngine() {
       }
       window_ = nullptr;
    }
-   if (owns_window_) {
-      // Not strictly needed for windows to close immediately but aligns
-      // behavior across backends.
-      DepleteRunLoopEventQueue();
-   }
-   // We need the message window in order to deplete the event queue.
    if (message_window_) {
+
+      if (owns_window_) {
+         // Not strictly needed for windows to close immediately but aligns
+         // behavior across backends.
+         DepleteRunLoopEventQueue();
+      }
+      // We need the message window in order to deplete the event queue.
       SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
       DestroyWindow(message_window_);
-      message_window_ = nullptr;
    }
+
+   message_window_ = nullptr;
 }
 
 void

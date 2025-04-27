@@ -179,14 +179,15 @@ public:
       Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options
    );
 
+   using WebviewOptions = Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions>;
    Win32EdgeEngine(
-      bool                                                    debug,
-      HWND                                                    window,
-      Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options       = nullptr,
-      std::string_view                                        user_data_dir = "",
-      DWORD                                                   style         = WS_OVERLAPPEDWINDOW,
-      DWORD                                                   exStyle       = 0,
-      std::function<void()>                                   on_terminate  = []() constexpr {}
+      bool                  debug,
+      HWND                  window,
+      WebviewOptions        options       = nullptr,
+      std::string_view      user_data_dir = "",
+      DWORD                 style         = WS_OVERLAPPEDWINDOW,
+      DWORD                 exStyle       = 0,
+      std::function<void()> on_terminate  = []() constexpr {}
    );
 
    ~Win32EdgeEngine() final;
