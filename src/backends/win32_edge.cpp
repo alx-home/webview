@@ -31,6 +31,7 @@
 #include <format>
 #include <regex>
 #include <utility>
+#include <dwmapi.h>
 #include <intsafe.h>
 #include <minwindef.h>
 #include <utils/String.h>
@@ -716,7 +717,26 @@ Win32EdgeEngine::Restore() {
 }
 
 void
-Win32EdgeEngine::SetBackroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
+Win32EdgeEngine::SetTitleBarColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
+   COLORREF title_bar_color = red | (green << 8) | (blue << 16) | ((0xFF - alpha) << 24);
+   DwmSetWindowAttribute(
+      window_, DWMWINDOWATTRIBUTE::DWMWA_CAPTION_COLOR, &title_bar_color, sizeof(title_bar_color)
+   );
+
+   SetWindowLongPtr(
+      window_,
+      GWL_STYLE,
+      GetWindowLongPtr(window_, GWL_STYLE)
+         | (WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION)
+   );
+
+   SetWindowPos(
+      window_, nullptr, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED
+   );
+}
+
+void
+Win32EdgeEngine::SetBackgroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
    SetWindowLong(window_, GWL_EXSTYLE, GetWindowLong(window_, GWL_EXSTYLE) | WS_EX_LAYERED);
    SetLayeredWindowAttributes(window_, RGB(red, green, blue), alpha, LWA_COLORKEY);
 

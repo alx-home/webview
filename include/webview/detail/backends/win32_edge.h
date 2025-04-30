@@ -221,7 +221,8 @@ public:
    void Show() final;
    void Restore() final;
 
-   void SetBackroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) final;
+   void SetTitleBarColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) final;
+   void SetBackgroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) final;
    void SetTopMost() final;
 
    void ToForeground() final;
