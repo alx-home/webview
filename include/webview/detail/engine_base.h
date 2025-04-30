@@ -102,6 +102,9 @@ public:
    virtual void Restore() = 0;
    virtual void Show()    = 0;
 
+   virtual void SetBackroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) = 0;
+   virtual void SetTopMost()                                                          = 0;
+
    void Init(std::string_view js);
 
    virtual void Eval(std::string_view js) = 0;

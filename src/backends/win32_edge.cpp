@@ -628,7 +628,6 @@ Win32EdgeEngine::SetSize(int width, int height, Hint hints) {
 
    if (hints == Hint::STATIC) {
       style &= ~(WS_THICKFRAME | WS_CAPTION);
-      style |= WS_EX_TOPMOST;
    } else if (hints == Hint::FIXED) {
       style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
    } else {
@@ -714,6 +713,29 @@ Win32EdgeEngine::Show() {
 void
 Win32EdgeEngine::Restore() {
    ShowWindow(window_, SW_RESTORE);
+}
+
+void
+Win32EdgeEngine::SetBackroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
+   SetWindowLong(window_, GWL_EXSTYLE, GetWindowLong(window_, GWL_EXSTYLE) | WS_EX_LAYERED);
+   SetLayeredWindowAttributes(window_, RGB(red, green, blue), alpha, LWA_COLORKEY);
+
+   Microsoft::WRL::ComPtr<ICoreWebView2Controller2> controller2;
+#   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
+   if (auto const result = controller_->QueryInterface(IID_PPV_ARGS(&controller2));
+       result != S_OK) {
+#   pragma clang diagnostic pop
+      return;
+   }
+
+   COREWEBVIEW2_COLOR const background_color{.A = alpha, .R = red, .G = green, .B = blue};
+   controller2->put_DefaultBackgroundColor(background_color);
+}
+
+void
+Win32EdgeEngine::SetTopMost() {
+   SetWindowLong(window_, GWL_EXSTYLE, GetWindowLong(window_, GWL_EXSTYLE) | WS_EX_TOPMOST);
 }
 
 void

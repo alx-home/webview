@@ -29,6 +29,8 @@
 #include "../../macros.h"
 
 #include "../../http.h"
+
+#include <cstdint>
 #include <map>
 #include <string>
 
@@ -218,6 +220,9 @@ public:
    void Hide() final;
    void Show() final;
    void Restore() final;
+
+   void SetBackroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) final;
+   void SetTopMost() final;
 
    void ToForeground() final;
 
