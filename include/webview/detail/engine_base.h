@@ -98,9 +98,9 @@ public:
 
    virtual void ToForeground() = 0;
 
-   virtual void Hide()    = 0;
-   virtual void Restore() = 0;
-   virtual void Show()    = 0;
+   virtual void Hide() const    = 0;
+   virtual void Restore() const = 0;
+   virtual void Show() const    = 0;
 
    virtual void SetTitleBarColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) = 0;
    virtual void SetBackgroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha)    = 0;

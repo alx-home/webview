@@ -217,9 +217,9 @@ public:
    Pos    GetPos() const final;
    Bounds GetBounds() const final;
 
-   void Hide() final;
-   void Show() final;
-   void Restore() final;
+   void Hide() const final;
+   void Show() const final;
+   void Restore() const final;
 
    void SetTitleBarColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) final;
    void SetBackgroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) final;

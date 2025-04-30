@@ -702,17 +702,17 @@ Win32EdgeEngine::GetBounds() const {
 }
 
 void
-Win32EdgeEngine::Hide() {
+Win32EdgeEngine::Hide() const {
    ShowWindow(window_, SW_HIDE);
 }
 
 void
-Win32EdgeEngine::Show() {
+Win32EdgeEngine::Show() const {
    ShowWindow(window_, SW_SHOW);
 }
 
 void
-Win32EdgeEngine::Restore() {
+Win32EdgeEngine::Restore() const {
    ShowWindow(window_, SW_RESTORE);
 }
 
