@@ -99,6 +99,7 @@ public:
    virtual void ToForeground() = 0;
 
    virtual void Hide() const    = 0;
+   virtual bool Hidden() const  = 0;
    virtual void Restore() const = 0;
    virtual void Show() const    = 0;
 

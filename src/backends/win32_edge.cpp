@@ -706,9 +706,15 @@ Win32EdgeEngine::Hide() const {
    ShowWindow(window_, SW_HIDE);
 }
 
+bool
+Win32EdgeEngine::Hidden() const {
+   return !IsWindowVisible(window_);
+}
+
 void
 Win32EdgeEngine::Show() const {
    ShowWindow(window_, SW_SHOW);
+   SetForegroundWindow(window_);
 }
 
 void

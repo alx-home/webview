@@ -218,6 +218,7 @@ public:
    Bounds GetBounds() const final;
 
    void Hide() const final;
+   bool Hidden() const final;
    void Show() const final;
    void Restore() const final;
 
