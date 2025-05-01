@@ -26,8 +26,11 @@
 #pragma once
 
 #include "../http.h"
+#include "promise/promise.h"
 #include "user_script.h"
 
+#include <list>
+#include <shared_mutex>
 #include <unordered_map>
 #include <atomic>
 #include <functional>
@@ -142,8 +145,21 @@ private:
    using bindings_t = std::unordered_map<std::string, std::shared_ptr<binding_t>>;
    bindings_t             bindings_{};
    user_script*           bind_script_{};
-   std::list<user_script> user_scripts_;
-   std::function<void()>  on_terminate_;
+   std::list<user_script> user_scripts_{};
+   std::function<void()>  on_terminate_{};
+
+   struct Promises {
+      using Id = std::string;
+      std::unordered_map<Id, promise::Pointer> handles_{};
+      std::mutex                               mutex_{};
+      std::shared_mutex                        done_mutex_{};
+      bool                                     done_{};
+
+      ~Promises();
+   };
+
+   // Must stays at the end !
+   Promises promises_{};
 };
 
 }  // namespace webview

@@ -25,10 +25,13 @@
 
 #include "detail/engine_base.h"
 #include "detail/user_script.h"
+#include "promise/promise.h"
 
 #include "errors.h"
 
+#include <condition_variable>
 #include <format>
+#include <mutex>
 #include <utility>
 #include <json/json.h>
 
@@ -279,4 +282,37 @@ Webview::DecWindowCount() {
    return 0;
 }
 
+Webview::Promises::~Promises() {
+   std::unique_lock _{done_mutex_};
+
+   auto handles = [this]() constexpr {
+      std::unique_lock lock{mutex_};
+      done_        = true;
+      auto handles = std::move(handles_);
+      lock.unlock();
+
+      return handles;
+   }();
+
+   std::condition_variable cv{};
+   std::mutex              mutex;
+   bool                    done = false;
+
+   // await all unhandled promises
+   auto prom_waiter = MakePromise([&handles, &cv, &done, &mutex]() -> Promise<void> {
+      for (auto& handle : handles) {
+         co_await handle.second->Await();
+      }
+
+      std::unique_lock lock{mutex};
+      done = true;
+      cv.notify_all();
+      co_return;
+   });
+
+   std::unique_lock lock{mutex};
+   if (!done) {
+      cv.wait(lock);
+   }
+}
 }  // namespace webview
