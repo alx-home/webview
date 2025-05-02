@@ -154,12 +154,8 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                                    auto             elem = promises_.handles_.find(id);
 
                                    if (elem != promises_.handles_.end()) {
-                                      std::unique_ptr<::Promise<void>::Details> ptr{
-                                         static_cast<::Promise<void>::Details*>(
-                                            elem->second.release()
-                                         )
-                                      };
-                                      ptr->Detach(std::move(ptr));
+                                      static_cast<::Promise<void>&&>(*elem->second.release())
+                                         .Detach();
 
                                       promises_.handles_.erase(elem);
                                    } else {
