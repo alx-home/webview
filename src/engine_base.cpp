@@ -300,13 +300,22 @@ Webview::Promises::~Promises() {
 
    // await all unhandled promises
    auto prom_waiter = MakePromise([&handles, &cv, &done, &mutex]() -> Promise<void> {
+      struct Done {
+         std::condition_variable& cv_;
+         std::mutex&              mutex_;
+         bool&                    done_;
+
+         ~Done() {
+            std::unique_lock lock{mutex_};
+            done_ = true;
+            cv_.notify_all();
+         }
+      } _{.cv_ = cv, .mutex_ = mutex, .done_ = done};
+
       for (auto& handle : handles) {
          co_await handle.second->Await();
       }
 
-      std::unique_lock lock{mutex};
-      done = true;
-      cv.notify_all();
       co_return;
    });
 
@@ -314,5 +323,8 @@ Webview::Promises::~Promises() {
    if (!done) {
       cv.wait(lock);
    }
+
+   assert(prom_waiter.Done());
+   assert(!prom_waiter.Exception());
 }
 }  // namespace webview
