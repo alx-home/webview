@@ -30,6 +30,7 @@
 #include "errors.h"
 
 #include <condition_variable>
+#include <exception>
 #include <format>
 #include <mutex>
 #include <utility>
@@ -58,8 +59,8 @@ void
 Webview::Unbind(std::string_view name) {
    if (bindings_.erase(std::string{name}) != 1) {
       throw Exception(ErrorInfo{
-         error_t::WEBVIEW_ERROR_NOT_FOUND,
-         std::string{"trying to unbind undefined binding "} + std::string{name}
+        error_t::WEBVIEW_ERROR_NOT_FOUND,
+        std::string{"trying to unbind undefined binding "} + std::string{name}
       });
    }
 
@@ -68,10 +69,10 @@ Webview::Unbind(std::string_view name) {
    // Notify that a binding was created if the init script has already
    // set things up.
    Eval(std::format(
-      R"(if (window.__webview__) {{
+     R"(if (window.__webview__) {{
     window.__webview__.onUnbind({})
 }})",
-      js::Serialize(name)
+     js::Serialize(name)
    ));
 }
 
@@ -116,7 +117,7 @@ Webview::AddInitScript(std::string_view post_fn) {
 std::string
 Webview::CreateInitScript(std::string_view post_fn) {
    return std::format(
-      R"(
+     R"(
 (function() {{
    'use strict';
 
@@ -196,7 +197,7 @@ Webview::CreateInitScript(std::string_view post_fn) {
   
    window.__webview__ = new Webview();
 }})())",
-      post_fn
+     post_fn
    );
 }
 
@@ -215,7 +216,7 @@ Webview::CreateBindScript() {
    js_names += "]";
 
    return std::format(
-      R"((function() {{
+     R"((function() {{
     'use strict';
     var methods = {};
 
@@ -223,7 +224,7 @@ Webview::CreateBindScript() {
         window.__webview__.onBind(name);
     }});
 }})())",
-      js_names
+     js_names
    );
 }
 
@@ -233,9 +234,9 @@ struct Message {
    std::string params_;
 
    static constexpr js::Proto PROTOTYPE{
-      js::_{"id", &Message::id_},
-      js::_{"method", &Message::name_},
-      js::_{"params", &Message::params_}
+     js::_{"id", &Message::id_},
+     js::_{"method", &Message::name_},
+     js::_{"params", &Message::params_}
    };
 };
 
@@ -313,7 +314,11 @@ Webview::Promises::~Promises() {
       } _{.cv_ = cv, .mutex_ = mutex, .done_ = done};
 
       for (auto& handle : handles) {
-         co_await handle.second->Await();
+         try {
+            co_await handle.second->Await();
+         } catch (std::exception const& e) {
+            std::cerr << e.what() << std::endl;
+         }
       }
 
       co_return;
