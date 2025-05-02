@@ -163,9 +163,12 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                        std::unique_lock lock{promises_.mutex_};
 
                        if (!ended) {
-                          auto const& [_, emplaced] = promises_.handles_.emplace(
-                            id, static_cast<::Promise<void>&&>(wrapper).ToPointer()
-                          );
+#ifndef NDEBUG
+                          auto const& [_, emplaced] =
+#endif  // !NDEBUG
+                            promises_.handles_.emplace(
+                              id, static_cast<::Promise<void>&&>(wrapper).ToPointer()
+                            );
                           assert(emplaced);
                        }
                     },
