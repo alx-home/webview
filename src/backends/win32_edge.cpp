@@ -492,7 +492,7 @@ Win32EdgeEngine::Win32EdgeEngine(
 
       switch (msg) {
          case WM_APP:
-            if (auto f = reinterpret_cast<std::function<void()>*>(lp)) {
+            if (auto f = reinterpret_cast<std::function<void()>*>(lp); f) {
                (*f)();
                delete f;
             }

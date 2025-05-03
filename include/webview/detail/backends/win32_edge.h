@@ -236,9 +236,9 @@ public:
 
    void OpenDevTools() final;
 
-private:
    void Dispatch(std::function<void()> f) final;
 
+private:
    void NavigateImpl(std::string_view url) final;
 
    std::multimap<std::wstring, url_handler_t, std::less<>> handlers_;
