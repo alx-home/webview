@@ -782,9 +782,23 @@ Win32EdgeEngine::OpenDevTools() {
 
 void
 Win32EdgeEngine::RegisterUrlHandler(std::string const& filter, url_handler_t&& handler) {
-   auto wfilter = utils::WidenString(filter);
-   auto result  = webview_->AddWebResourceRequestedFilter(
-     wfilter.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL
+   auto                                     wfilter = utils::WidenString(filter);
+   Microsoft::WRL::ComPtr<ICoreWebView2_22> wv22;
+#   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
+   auto result = webview_->QueryInterface(IID_PPV_ARGS(&wv22));
+#   pragma clang diagnostic pop
+   if (result != S_OK) {
+      throw Exception{
+        error_t::WEBVIEW_ERROR_UNSPECIFIED,
+        std::format("QueryInterface ICoreWebView2_22 Failed ({})", std::to_string(result), filter)
+      };
+   }
+
+   result = wv22->AddWebResourceRequestedFilterWithRequestSourceKinds(
+     wfilter.c_str(),
+     COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+     COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL
    );
 
    if (result != S_OK) {
