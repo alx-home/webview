@@ -83,10 +83,10 @@ public:
    template <class PROMISE> void Bind(std::string_view name, PROMISE&& promise);
    void                          Unbind(std::string_view name);
 
-   virtual void Run()                               = 0;
-   virtual void Terminate()                         = 0;
-   virtual void Dispatch(std::function<void()>&& f) = 0;
-   virtual void SetTitle(std::string_view title)    = 0;
+   virtual void Run()                             = 0;
+   virtual void Terminate()                       = 0;
+   virtual void Dispatch(std::function<void()> f) = 0;
+   virtual void SetTitle(std::string_view title)  = 0;
 
    virtual void SetSize(int width, int height, Hint hints) = 0;
    virtual void SetPos(int x, int y)                       = 0;

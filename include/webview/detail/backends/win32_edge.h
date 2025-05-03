@@ -107,7 +107,7 @@ class Webview2ComHandler
    , public ICoreWebView2WebMessageReceivedEventHandler
    , public ICoreWebView2PermissionRequestedEventHandler {
    using webview2_com_handler_cb_t =
-      std::function<void(ICoreWebView2Controller*, ICoreWebView2* webview)>;
+     std::function<void(ICoreWebView2Controller*, ICoreWebView2* webview)>;
 
 public:
    Webview2ComHandler(msg_cb_t msgCb, webview2_com_handler_cb_t cb);
@@ -177,19 +177,19 @@ public:
    static auto MakeOptions() { return Microsoft::WRL::Make<CoreWebView2EnvironmentOptions>(); }
 
    static void SetSchemesOption(
-      std::vector<std::string> const&                         schemes,
-      Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options
+     std::vector<std::string> const&                         schemes,
+     Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options
    );
 
    using WebviewOptions = Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions>;
    Win32EdgeEngine(
-      bool                  debug,
-      HWND                  window,
-      WebviewOptions        options       = nullptr,
-      std::string_view      user_data_dir = "",
-      DWORD                 style         = WS_OVERLAPPEDWINDOW,
-      DWORD                 exStyle       = 0,
-      std::function<void()> on_terminate  = []() constexpr {}
+     bool                  debug,
+     HWND                  window,
+     WebviewOptions        options       = nullptr,
+     std::string_view      user_data_dir = "",
+     DWORD                 style         = WS_OVERLAPPEDWINDOW,
+     DWORD                 exStyle       = 0,
+     std::function<void()> on_terminate  = []() constexpr {}
    );
 
    ~Win32EdgeEngine() final;
@@ -237,7 +237,7 @@ public:
    void OpenDevTools() final;
 
 private:
-   void Dispatch(std::function<void()>&& f) final;
+   void Dispatch(std::function<void()> f) final;
 
    void NavigateImpl(std::string_view url) final;
 
@@ -249,9 +249,9 @@ private:
 
    //---------------------------------------------------------------------------------------------------------------------
    http::request_t MakeRequest(
-      std::string const& uri,
-      COREWEBVIEW2_WEB_RESOURCE_CONTEXT,
-      ICoreWebView2WebResourceRequest* webViewRequest
+     std::string const& uri,
+     COREWEBVIEW2_WEB_RESOURCE_CONTEXT,
+     ICoreWebView2WebResourceRequest* webViewRequest
    );
 
    user_script AddUserScriptImpl(std::string_view js) final;
@@ -288,7 +288,6 @@ private:
    HWND                     message_window_ = nullptr;
    POINT                    minsz_          = POINT{0, 0};
    POINT                    maxsz_          = POINT{0, 0};
-   DWORD                    main_thread_    = GetCurrentThreadId();
    ICoreWebView2*           webview_        = nullptr;
    ICoreWebView2Controller* controller_     = nullptr;
    Webview2ComHandler*      com_handler_    = nullptr;

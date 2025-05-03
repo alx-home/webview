@@ -130,8 +130,8 @@ Webview2ComHandler::Invoke(HRESULT res, ICoreWebView2Controller* controller) {
 
 HRESULT STDMETHODCALLTYPE
 Webview2ComHandler::Invoke(
-   ICoreWebView2* /*sender*/,
-   ICoreWebView2WebMessageReceivedEventArgs* args
+  ICoreWebView2* /*sender*/,
+  ICoreWebView2WebMessageReceivedEventArgs* args
 ) {
    LPWSTR message{};
    auto   res = args->TryGetWebMessageAsString(&message);
@@ -145,8 +145,8 @@ Webview2ComHandler::Invoke(
 
 HRESULT STDMETHODCALLTYPE
 Webview2ComHandler::Invoke(
-   ICoreWebView2* /*sender*/,
-   ICoreWebView2PermissionRequestedEventArgs* args
+  ICoreWebView2* /*sender*/,
+  ICoreWebView2PermissionRequestedEventArgs* args
 ) {
    COREWEBVIEW2_PERMISSION_KIND kind;
    args->get_PermissionKind(&kind);
@@ -237,16 +237,16 @@ UserScriptHandler::Invoke(HRESULT res, LPCWSTR id) {
 
 void
 Win32EdgeEngine::SetSchemesOption(
-   std::vector<std::string> const&                         schemes,
-   Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options
+  std::vector<std::string> const&                         schemes,
+  Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options
 ) {
    Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions4> options4;
 
    auto const result = options.As(&options4);
    if (result != S_OK) {
       throw Exception{
-         error_t::WEBVIEW_ERROR_UNSPECIFIED,
-         std::format("Could not set options: {}", std::to_string(result))
+        error_t::WEBVIEW_ERROR_UNSPECIFIED,
+        std::format("Could not set options: {}", std::to_string(result))
       };
    }
 
@@ -258,7 +258,7 @@ Win32EdgeEngine::SetSchemesOption(
    for (auto const& scheme : schemes) {
       auto const wscheme = utils::WidenString(scheme);
       auto const schemeReg =
-         Microsoft::WRL::Make<CoreWebView2CustomSchemeRegistration>(wscheme.c_str());
+        Microsoft::WRL::Make<CoreWebView2CustomSchemeRegistration>(wscheme.c_str());
 
       std::array<wchar_t const*, 1> origins{L"*"};
       schemeReg->SetAllowedOrigins(static_cast<UINT32>(origins.size()), origins.data());
@@ -274,13 +274,13 @@ Win32EdgeEngine::SetSchemesOption(
 }
 
 Win32EdgeEngine::Win32EdgeEngine(
-   bool                  debug,
-   HWND                  window,
-   WebviewOptions        options,
-   std::string_view      user_data_dir,
-   DWORD                 style,
-   DWORD                 exStyle,
-   std::function<void()> on_terminate
+  bool                  debug,
+  HWND                  window,
+  WebviewOptions        options,
+  std::string_view      user_data_dir,
+  DWORD                 style,
+  DWORD                 exStyle,
+  std::function<void()> on_terminate
 )
    : Webview(std::move(on_terminate))
    , wuser_data_dir_{utils::WidenString(user_data_dir)}
@@ -297,12 +297,12 @@ Win32EdgeEngine::Win32EdgeEngine(
       EnableDpiAwareness();
 
       auto icon = static_cast<HICON>(LoadImage(
-         instance,
-         IDI_APPLICATION,
-         IMAGE_ICON,
-         GetSystemMetrics(SM_CXICON),
-         GetSystemMetrics(SM_CYICON),
-         LR_DEFAULTCOLOR
+        instance,
+        IDI_APPLICATION,
+        IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON),
+        GetSystemMetrics(SM_CYICON),
+        LR_DEFAULTCOLOR
       ));
 
       // Create a top-level window.
@@ -386,18 +386,18 @@ Win32EdgeEngine::Win32EdgeEngine(
       RegisterClassExW(&wc);
 
       CreateWindowExW(
-         exStyle,
-         L"webview",
-         L"",
-         style,
-         CW_USEDEFAULT,
-         CW_USEDEFAULT,
-         0,
-         0,
-         nullptr,
-         nullptr,
-         instance,
-         this
+        exStyle,
+        L"webview",
+        L"",
+        style,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        0,
+        0,
+        nullptr,
+        nullptr,
+        instance,
+        this
       );
       if (!window_) {
          throw Exception{error_t::WEBVIEW_ERROR_INVALID_STATE, "Window is null"};
@@ -452,18 +452,18 @@ Win32EdgeEngine::Win32EdgeEngine(
    });
    RegisterClassExW(&widget_wc);
    CreateWindowExW(
-      WS_EX_CONTROLPARENT,
-      L"webview_widget",
-      nullptr,
-      WS_CHILD,
-      0,
-      0,
-      0,
-      0,
-      window_,
-      nullptr,
-      instance,
-      this
+     WS_EX_CONTROLPARENT,
+     L"webview_widget",
+     nullptr,
+     WS_CHILD,
+     0,
+     0,
+     0,
+     0,
+     window_,
+     nullptr,
+     instance,
+     this
    );
    if (!widget_) {
       throw Exception{error_t::WEBVIEW_ERROR_INVALID_STATE, "Widget window is null"};
@@ -508,7 +508,7 @@ Win32EdgeEngine::Win32EdgeEngine(
    });
    RegisterClassExW(&message_wc);
    CreateWindowExW(
-      0, L"webview_message", nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, instance, this
+     0, L"webview_message", nullptr, 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, instance, this
    );
    if (!message_window_) {
       throw Exception{error_t::WEBVIEW_ERROR_INVALID_STATE, "Message window is null"};
@@ -614,7 +614,7 @@ Win32EdgeEngine::Terminate() {
 }
 
 void
-Win32EdgeEngine::Dispatch(std::function<void()>&& f) {
+Win32EdgeEngine::Dispatch(std::function<void()> f) {
    PostMessageW(message_window_, WM_APP, 0, (LPARAM) new std::function<void()>(std::move(f)));
 }
 
@@ -653,13 +653,13 @@ Win32EdgeEngine::SetSize(int width, int height, Hint hints) {
       auto scaled_size = ScaleSize(width, height, get_default_window_dpi(), dpi);
       auto frame_size  = MakeWindowFrameSize(window_, scaled_size.cx, scaled_size.cy, dpi);
       SetWindowPos(
-         window_,
-         nullptr,
-         0,
-         0,
-         frame_size.cx,
-         frame_size.cy,
-         SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED | SWP_NOZORDER
+        window_,
+        nullptr,
+        0,
+        0,
+        frame_size.cx,
+        frame_size.cy,
+        SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED | SWP_NOZORDER
       );
    }
 }
@@ -696,8 +696,8 @@ Win32EdgeEngine::GetBounds() const {
    RECT bounds;
    GetWindowRect(window_, &bounds);
    return {
-      {.x_ = bounds.left, .y_ = bounds.top},
-      {.width_ = bounds.right - bounds.left, .height_ = bounds.bottom - bounds.top}
+     {.x_ = bounds.left, .y_ = bounds.top},
+     {.width_ = bounds.right - bounds.left, .height_ = bounds.bottom - bounds.top}
    };
 }
 
@@ -726,18 +726,18 @@ void
 Win32EdgeEngine::SetTitleBarColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha) {
    COLORREF title_bar_color = red | (green << 8) | (blue << 16) | ((0xFF - alpha) << 24);
    DwmSetWindowAttribute(
-      window_, DWMWINDOWATTRIBUTE::DWMWA_CAPTION_COLOR, &title_bar_color, sizeof(title_bar_color)
+     window_, DWMWINDOWATTRIBUTE::DWMWA_CAPTION_COLOR, &title_bar_color, sizeof(title_bar_color)
    );
 
    SetWindowLongPtr(
-      window_,
-      GWL_STYLE,
-      GetWindowLongPtr(window_, GWL_STYLE)
-         | (WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION)
+     window_,
+     GWL_STYLE,
+     GetWindowLongPtr(window_, GWL_STYLE)
+       | (WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU | WS_CAPTION)
    );
 
    SetWindowPos(
-      window_, nullptr, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED
+     window_, nullptr, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED
    );
 }
 
@@ -784,17 +784,17 @@ void
 Win32EdgeEngine::RegisterUrlHandler(std::string const& filter, url_handler_t&& handler) {
    auto wfilter = utils::WidenString(filter);
    auto result  = webview_->AddWebResourceRequestedFilter(
-      wfilter.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL
+     wfilter.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL
    );
 
    if (result != S_OK) {
       throw Exception{
-         error_t::WEBVIEW_ERROR_UNSPECIFIED,
-         std::format(
-            "Could not AddWebResourceRequestedFilter: {} for scheme: {}",
-            std::to_string(result),
-            filter
-         )
+        error_t::WEBVIEW_ERROR_UNSPECIFIED,
+        std::format(
+          "Could not AddWebResourceRequestedFilter: {} for scheme: {}",
+          std::to_string(result),
+          filter
+        )
       };
    }
 
@@ -823,52 +823,51 @@ Win32EdgeEngine::InstallResourceHandler() {
    ::EventRegistrationToken token;
 
    auto const result = webview_->add_WebResourceRequested(
-      Microsoft::WRL::Callback<ICoreWebView2WebResourceRequestedEventHandler>(
-         [this](ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs* args) {
-            COREWEBVIEW2_WEB_RESOURCE_CONTEXT resource_context;
+     Microsoft::WRL::Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+       [this](ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs* args) {
+          COREWEBVIEW2_WEB_RESOURCE_CONTEXT resource_context;
 
-            auto result = args->get_ResourceContext(&resource_context);
-            if (result != S_OK) {
-               return result;
-            }
+          auto result = args->get_ResourceContext(&resource_context);
+          if (result != S_OK) {
+             return result;
+          }
 
-            Microsoft::WRL::ComPtr<ICoreWebView2WebResourceRequest> web_view_request;
-            args->get_Request(&web_view_request);
+          Microsoft::WRL::ComPtr<ICoreWebView2WebResourceRequest> web_view_request;
+          args->get_Request(&web_view_request);
 
-            const auto wuri = [&web_view_request]() {
-               LPWSTR uri;
-               web_view_request->get_Uri(&uri);
-               std::wstring wuri{uri};
-               CoTaskMemFree(uri);
+          const auto wuri = [&web_view_request]() {
+             LPWSTR uri;
+             web_view_request->get_Uri(&uri);
+             std::wstring wuri{uri};
+             CoTaskMemFree(uri);
 
-               return wuri;
-            }();
+             return wuri;
+          }();
 
-            for (auto const& handler : handlers_) {
-               if (std::regex_match(wuri, std::wregex{handler.first})) {
-                  auto const request = MakeRequest(
-                     utils::NarrowString(wuri), resource_context, web_view_request.Get()
-                  );
-                  auto const response = MakeResponse(handler.second(request), result);
+          for (auto const& handler : handlers_) {
+             if (std::regex_match(wuri, std::wregex{handler.first})) {
+                auto const request =
+                  MakeRequest(utils::NarrowString(wuri), resource_context, web_view_request.Get());
+                auto const response = MakeResponse(handler.second(request), result);
 
-                  if (result != S_OK) {
-                     return result;
-                  }
+                if (result != S_OK) {
+                   return result;
+                }
 
-                  return args->put_Response(response.Get());
-               }
-            }
+                return args->put_Response(response.Get());
+             }
+          }
 
-            return S_OK;
-         }
-      ).Get(),
-      &token
+          return S_OK;
+       }
+     ).Get(),
+     &token
    );
 
    if (result != S_OK) {
       throw Exception{
-         error_t::WEBVIEW_ERROR_UNSPECIFIED,
-         std::format("Could not install resource handler: {}", std::to_string(result))
+        error_t::WEBVIEW_ERROR_UNSPECIFIED,
+        std::format("Could not install resource handler: {}", std::to_string(result))
       };
    }
 }
@@ -902,13 +901,13 @@ Win32EdgeEngine::MakeResponse(http::response_t const& responseData, HRESULT& res
 
    Microsoft::WRL::ComPtr<IStream> stream;
    stream.Attach(SHCreateMemStream(
-      reinterpret_cast<const BYTE*>(responseData.body.data()),
-      static_cast<UINT>(responseData.body.size())
+     reinterpret_cast<const BYTE*>(responseData.body.data()),
+     static_cast<UINT>(responseData.body.size())
    ));
 
    const auto phrase = utils::WidenString(responseData.reasonPhrase);
    result            = environment->CreateWebResourceResponse(
-      stream.Get(), responseData.statusCode, phrase.c_str(), response_headers.c_str(), &response
+     stream.Get(), responseData.statusCode, phrase.c_str(), response_headers.c_str(), &response
    );
 
    return response;
@@ -917,70 +916,70 @@ Win32EdgeEngine::MakeResponse(http::response_t const& responseData, HRESULT& res
 //---------------------------------------------------------------------------------------------------------------------
 http::request_t
 Win32EdgeEngine::MakeRequest(
-   std::string const& uri,
-   COREWEBVIEW2_WEB_RESOURCE_CONTEXT,
-   ICoreWebView2WebResourceRequest* webViewRequest
+  std::string const& uri,
+  COREWEBVIEW2_WEB_RESOURCE_CONTEXT,
+  ICoreWebView2WebResourceRequest* webViewRequest
 ) {
    return http::request_t{
-      .getContent =
-         [webViewRequest, content_memo = std::string{}]() mutable {
-            if (!content_memo.empty()) {
-               return content_memo;
-            }
+     .getContent =
+       [webViewRequest, content_memo = std::string{}]() mutable {
+          if (!content_memo.empty()) {
+             return content_memo;
+          }
 
-            Microsoft::WRL::ComPtr<IStream> stream;
-            webViewRequest->get_Content(&stream);
+          Microsoft::WRL::ComPtr<IStream> stream;
+          webViewRequest->get_Content(&stream);
 
-            if (!stream) {
-               return content_memo;
-            }
+          if (!stream) {
+             return content_memo;
+          }
 
-            // FIXME: Dont read the whole thing into memory, if possible via streaming.
-            ULONG bytes_read = 0;
-            do {
-               std::array<char, 1024> buffer{};
-               stream->Read(buffer.data(), 1024, &bytes_read);
-               content_memo.append(buffer.data(), bytes_read);
-            } while (bytes_read == 1024);
-            return content_memo;
-         },
-      .uri = uri,
-      .method =
-         [webViewRequest]() {
-            LPWSTR method;
-            webViewRequest->get_Method(&method);
-            std::wstring method_w{method};
-            CoTaskMemFree(method);
-            return utils::NarrowString(method_w);
-         }(),
-      .headers =
-         [webViewRequest]() {
-            ICoreWebView2HttpRequestHeaders* headers;
-            webViewRequest->get_Headers(&headers);
+          // FIXME: Dont read the whole thing into memory, if possible via streaming.
+          ULONG bytes_read = 0;
+          do {
+             std::array<char, 1024> buffer{};
+             stream->Read(buffer.data(), 1024, &bytes_read);
+             content_memo.append(buffer.data(), bytes_read);
+          } while (bytes_read == 1024);
+          return content_memo;
+       },
+     .uri = uri,
+     .method =
+       [webViewRequest]() {
+          LPWSTR method;
+          webViewRequest->get_Method(&method);
+          std::wstring method_w{method};
+          CoTaskMemFree(method);
+          return utils::NarrowString(method_w);
+       }(),
+     .headers =
+       [webViewRequest]() {
+          ICoreWebView2HttpRequestHeaders* headers;
+          webViewRequest->get_Headers(&headers);
 
-            Microsoft::WRL::ComPtr<ICoreWebView2HttpHeadersCollectionIterator> iterator;
-            headers->GetIterator(&iterator);
+          Microsoft::WRL::ComPtr<ICoreWebView2HttpHeadersCollectionIterator> iterator;
+          headers->GetIterator(&iterator);
 
-            std::unordered_multimap<std::string, std::string> headers_map;
-            for (BOOL has_current;
-                 SUCCEEDED(iterator->get_HasCurrentHeader(&has_current)) && has_current;) {
-               LPWSTR name;
-               LPWSTR value;
-               iterator->GetCurrentHeader(&name, &value);
-               std::wstring name_w{name};
-               std::wstring value_w{value};
-               CoTaskMemFree(name);
-               CoTaskMemFree(value);
+          std::unordered_multimap<std::string, std::string> headers_map;
+          for (BOOL has_current;
+               SUCCEEDED(iterator->get_HasCurrentHeader(&has_current)) && has_current;) {
+             LPWSTR name;
+             LPWSTR value;
+             iterator->GetCurrentHeader(&name, &value);
+             std::wstring name_w{name};
+             std::wstring value_w{value};
+             CoTaskMemFree(name);
+             CoTaskMemFree(value);
 
-               headers_map.emplace(utils::NarrowString(name_w), utils::NarrowString(value_w));
+             headers_map.emplace(utils::NarrowString(name_w), utils::NarrowString(value_w));
 
-               BOOL has_next = FALSE;
-               if (FAILED(iterator->MoveNext(&has_next)) || !has_next) {
-                  break;
-               }
-            }
-            return headers_map;
-         }()
+             BOOL has_next = FALSE;
+             if (FAILED(iterator->MoveNext(&has_next)) || !has_next) {
+                break;
+             }
+          }
+          return headers_map;
+       }()
    };
 }
 
@@ -1018,10 +1017,10 @@ Win32EdgeEngine::AddUserScriptImpl(std::string_view js) {
    // TODO: There's a non-zero chance that we didn't get the script ID.
    //       We need to convey the error somehow.
    return {
-      js,
-      user_script::impl_ptr{
-         new user_script::impl{script_id, wjs}, [](user_script::impl* p) { delete p; }
-      }
+     js,
+     user_script::impl_ptr{
+       new user_script::impl{script_id, wjs}, [](user_script::impl* p) { delete p; }
+     }
    };
 }
 
@@ -1042,36 +1041,36 @@ Win32EdgeEngine::AreUserScriptsEqual(user_script const& first, user_script const
 
 void
 Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
-   std::atomic_flag flag = ATOMIC_FLAG_INIT;
+   std::atomic_flag flag{};
    flag.test_and_set();
 
    std::wstring current_exe_path;
    current_exe_path.reserve(MAX_PATH);
    current_exe_path.resize(
-      GetModuleFileNameW(nullptr, current_exe_path.data(), current_exe_path.capacity())
+     GetModuleFileNameW(nullptr, current_exe_path.data(), current_exe_path.capacity())
    );
 
    std::wstring current_exe_name{PathFindFileNameW(current_exe_path.c_str())};
 
    com_handler_ =
-      new Webview2ComHandler(cb, [&](ICoreWebView2Controller* controller, ICoreWebView2* webview) {
-         if (!controller || !webview) {
-            flag.clear();
-            return;
-         }
-         controller->AddRef();
-         webview->AddRef();
-         controller_ = controller;
-         webview_    = webview;
-         flag.clear();
-      });
+     new Webview2ComHandler(cb, [&](ICoreWebView2Controller* controller, ICoreWebView2* webview) {
+        if (!controller || !webview) {
+           flag.clear();
+           return;
+        }
+        controller->AddRef();
+        webview->AddRef();
+        controller_ = controller;
+        webview_    = webview;
+        flag.clear();
+     });
 
    com_handler_->SetAttemptHandler([&] {
       return webview2_loader_.create_environment_with_options(
-         nullptr,
-         wuser_data_dir_.size() ? wuser_data_dir_.c_str() : nullptr,
-         options_.Get(),
-         com_handler_
+        nullptr,
+        wuser_data_dir_.size() ? wuser_data_dir_.c_str() : nullptr,
+        options_.Get(),
+        com_handler_
       );
    });
    com_handler_->HandleWindow(widget_);
@@ -1079,7 +1078,7 @@ Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
    // Pump the message loop until WebView2 has finished initialization.
    bool got_quit_msg = false;
    MSG  msg;
-   while (flag.test_and_set() && GetMessageW(&msg, nullptr, 0, 0) >= 0) {
+   while (flag.test() && GetMessageW(&msg, nullptr, 0, 0) >= 0) {
       if (msg.message == WM_QUIT) {
          got_quit_msg = true;
          break;
@@ -1163,13 +1162,13 @@ Win32EdgeEngine::OnDpiChanged(int dpi) {
    auto scaled_size = GetScaledSize(dpi_, dpi);
    auto frame_size  = MakeWindowFrameSize(window_, scaled_size.cx, scaled_size.cy, dpi);
    SetWindowPos(
-      window_,
-      nullptr,
-      0,
-      0,
-      frame_size.cx,
-      frame_size.cy,
-      SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED
+     window_,
+     nullptr,
+     0,
+     0,
+     frame_size.cx,
+     frame_size.cy,
+     SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE | SWP_FRAMECHANGED
    );
    dpi_ = dpi;
 }
