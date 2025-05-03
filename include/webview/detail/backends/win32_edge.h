@@ -203,7 +203,9 @@ public:
    HWND                     Widget() const;
    ICoreWebView2Controller* BrowserController() const;
 
-   void RegisterUrlHandler(std::string const& filter, url_handler_t&& handler) final;
+   void RegisterUrlHandler(std::string_view filter, url_handler_t handler) final;
+   void RegisterUrlHandlers(std::vector<std::string_view> const& filters, url_handler_t handler)
+     final;
    void InstallResourceHandler() final;
 
    void SetTitle(std::string_view title) final;

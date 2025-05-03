@@ -78,7 +78,9 @@ public:
 
    void Navigate(std::string_view url);
 
-   virtual void RegisterUrlHandler(std::string const& filter, url_handler_t&& handler) = 0;
+   virtual void RegisterUrlHandler(std::string_view filter, url_handler_t handler) = 0;
+   virtual void
+   RegisterUrlHandlers(std::vector<std::string_view> const& filters, url_handler_t handler) = 0;
 
    template <class PROMISE> void Bind(std::string_view name, PROMISE&& promise);
    void                          Unbind(std::string_view name);

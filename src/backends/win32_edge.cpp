@@ -260,7 +260,15 @@ Win32EdgeEngine::SetSchemesOption(
       auto const schemeReg =
         Microsoft::WRL::Make<CoreWebView2CustomSchemeRegistration>(wscheme.c_str());
 
-      std::array<wchar_t const*, 1> origins{L"*"};
+      std::vector<wchar_t const*> origins{L"*", L"https://*"};
+      std::vector<std::wstring>   origins_str;
+      for (auto const& scheme : schemes) {
+         origins_str.emplace_back(utils::WidenString(scheme) + L"://*");
+      }
+
+      for (auto const& origin : origins_str) {
+         origins.emplace_back(origin.data());
+      }
       schemeReg->SetAllowedOrigins(static_cast<UINT32>(origins.size()), origins.data());
       schemeReg->put_TreatAsSecure(true);
       schemeReg->put_HasAuthorityComponent(true);
@@ -781,7 +789,17 @@ Win32EdgeEngine::OpenDevTools() {
 }
 
 void
-Win32EdgeEngine::RegisterUrlHandler(std::string const& filter, url_handler_t&& handler) {
+Win32EdgeEngine::RegisterUrlHandlers(
+  std::vector<std::string_view> const& filters,
+  url_handler_t                        handler
+) {
+   for (auto const& filter : filters) {
+      RegisterUrlHandler(filter, handler);
+   }
+}
+
+void
+Win32EdgeEngine::RegisterUrlHandler(std::string_view filter, url_handler_t handler) {
    auto                                     wfilter = utils::WidenString(filter);
    Microsoft::WRL::ComPtr<ICoreWebView2_22> wv22;
 #   pragma clang diagnostic push
