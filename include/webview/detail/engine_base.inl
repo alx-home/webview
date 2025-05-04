@@ -122,7 +122,7 @@ Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
           // Cleanup
 
           Dispatch([this, id]() constexpr {
-             auto elem = promises_.handles_.find(id);
+             auto elem = promises_.handles_.find("bind_" + id);
 
              if (elem != promises_.handles_.end()) {
                 // Detach the promise, as there is a slight chance that dispatch might be
@@ -180,7 +180,7 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 #ifndef NDEBUG
                   auto const& [_, emplaced] =
 #endif  // !NDEBUG
-                    promises_.handles_.emplace(id, std::move(wrapper));
+                    promises_.handles_.emplace("bind_" + std::string{id}, std::move(wrapper));
                   assert(emplaced);
 
                } catch (js::SerializableException const& exc) {
@@ -267,7 +267,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
         // Cleanup
 
         Dispatch([this, id]() constexpr {
-           auto elem = promises_.handles_.find(id);
+           auto elem = promises_.handles_.find("call_" + id);
 
            if (elem != promises_.handles_.end()) {
               // Detach the promise, as there is a slight chance that dispatch might be
@@ -285,7 +285,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
 #ifndef NDEBUG
    auto const& [result, emplaced] =
 #endif  // !NDEBUG
-     promises_.handles_.emplace(id, Promises::Cleaner{std::move(promise), reject_ptr});
+     promises_.handles_.emplace("call_" + id, Promises::Cleaner{std::move(promise), reject_ptr});
    assert(emplaced);
 
    std::tuple arguments{std::forward<ARGS>(args)...};
