@@ -26,6 +26,7 @@
 #pragma once
 
 #include "../errors.h"
+#include "utils/Nonce.h"
 #include "engine_base.h"
 
 #include <json/json.h>
@@ -34,12 +35,107 @@
 #include <exception>
 #include <format>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <string_view>
 #include <tuple>
+#include <utility>
 
 namespace webview {
+template <class PROMISE>
+Webview::Promises::Cleaner::Cleaner(PROMISE&& promise, promise::Reject const* reject)
+   : promise_(std::make_unique<PROMISE>(std::move(promise)))
+   , reject_{reject} {}
+
+template <class EXCEPTION, class... ARGS>
+void
+Webview::Promises::Cleaner::Reject(ARGS&&... args) {
+   assert(!detached_);
+   if (reject_) {
+      MakeReject<EXCEPTION>(*reject_, std::forward<ARGS>(args)...);
+   }
+}
+
+template <class PROMISE>
+PROMISE&
+Webview::Promises::Cleaner::Promise() {
+   return static_cast<PROMISE&>(*promise_);
+}
+
+template <class PROMISE, class... ARGS>
+auto
+Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
+   using return_t = promise::return_t<promise::return_t<PROMISE>>;
+
+   return
+     [this, &promise, &id, &args...]() constexpr {
+        if constexpr (std::is_void_v<return_t>) {
+           return MakePromise(promise, std::forward<ARGS>(args)...)
+             .Then([id = std::string{id}, this]() -> ::Promise<void> {
+                co_return Dispatch([id = js::Serialize(id), this]() {
+                   Eval(R"(window.__webview__.onReply({}, false, undefined, "{}"))", id, nonce_);
+                });
+             });
+        } else {
+           return MakePromise(promise, std::forward<ARGS>(args)...)
+             .Then([id{std::string{id}}, this](return_t const& result) -> ::Promise<void> {
+                co_return Dispatch([id = js::Serialize(id), result = js::Serialize(result), this](
+                                   ) {
+                   Eval(
+                     R"(window.__webview__.onReply({}, false, {}, "{}"))",
+                     id,
+                     js::Serialize(result),
+                     nonce_
+                   );
+                });
+             });
+        }
+     }()
+       .Catch(
+         [id = std::string{id}, this](js::SerializableException const& exc) -> ::Promise<void> {
+            co_return Dispatch([id = js::Serialize(id), exception = exc.Serialize(), this]() {
+               Eval(
+                 R"(window.__webview__.onReply({}, true, {}, "{}"))",
+                 id,
+                 js::Serialize(exception),
+                 nonce_
+               );
+            });
+         }
+       )
+       .Catch([id = std::string{id}, this](std::exception const& exc) -> ::Promise<void> {
+          co_return Dispatch([id        = js::Serialize(id),
+                              exception = js::Serialize<std::string_view>(exc.what()),
+                              this]() {
+             Eval(
+               R"(window.__webview__.onReply({}, true, {}, "{}"))",
+               id,
+               js::Serialize(exception),
+               nonce_
+             );
+          });
+       })
+       .Catch([id = std::string{id}, this](std::exception_ptr) -> ::Promise<void> {
+          co_return Dispatch([id = js::Serialize(id), this]() {
+             Eval(R"(window.__webview__.onReply({}, true, "unknown exception", "{}"))", id, nonce_);
+          });
+       })
+       .Then([this, id = std::string{id}]() -> ::Promise<void> {
+          // Cleanup
+
+          Dispatch([this, id]() constexpr {
+             auto elem = promises_.handles_.find(id);
+
+             if (elem != promises_.handles_.end()) {
+                // Detach the promise, as there is a slight chance that dispatch might be
+                // executed before the promise completes
+                std::move(elem->second).Detach();
+                promises_.handles_.erase(elem);
+             } else {
+                assert(false);
+             }
+          });
+          co_return;
+       });
+}
 
 template <class PROMISE>
 void
@@ -50,15 +146,15 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
             std::make_shared<binding_t>([this, promise = std::forward<PROMISE>(promise)](
                                           std::string_view id, std::string_view js_args
                                         ) {
-               using return_t = promise::return_t<promise::return_t<decltype(promise)>>;
-               using args_t   = promise::args_t<decltype(promise)>;
+               using args_t = promise::args_t<decltype(promise)>;
 
-               std::shared_lock lock{promises_.done_mutex_};
                if (promises_.done_) {
                   return Dispatch([id = js::Serialize(id), this]() {
                      Eval(
-                       "window.__webview__.onReply(" + id + ", 1, "
-                       + js::Serialize<std::string_view>("Terminated webview !") + ")"
+                       R"(window.__webview__.onReply({}, true, {}, "{}"))",
+                       id,
+                       js::Serialize<std::string_view>("Terminated webview !"),
+                       nonce_
                      );
                   });
                }
@@ -72,112 +168,28 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                      }
                   }();
 
-                  std::apply(
-                    [&]<class... ARGS>(ARGS&&... args) constexpr {
-                       bool ended = false;
+                  ::Promise<void> wrapper{
+                    std::apply(
+                      [&]<class... ARGS>(ARGS&&... args) constexpr {
+                         return MakeWrapper(promise, id, std::forward<ARGS>(args)...);
+                      },
+                      args
+                    ),
+                  };
 
-                       ::Promise<void> wrapper{
-                         [this, &promise, &id, &args...]() constexpr {
-                            if constexpr (std::is_void_v<return_t>) {
-                               return MakePromise(promise, std::forward<ARGS>(args)...)
-                                 .Then([id = std::string{id}, this]() -> ::Promise<void> {
-                                    co_return Dispatch([id = js::Serialize(id), this]() {
-                                       Eval("window.__webview__.onReply(" + id + ", 0, undefined)");
-                                    });
-                                 });
-                            } else {
-                               return MakePromise(promise, std::forward<ARGS>(args)...)
-                                 .Then(
-                                   [id{std::string{id}},
-                                    this](return_t const& result) -> ::Promise<void> {
-                                      co_return Dispatch([id     = js::Serialize(id),
-                                                          result = js::Serialize(result),
-                                                          this]() {
-                                         Eval(
-                                           "window.__webview__.onReply(" + id + ", 0, "
-                                           + js::Serialize(result) + ")"
-                                         );
-                                      });
-                                   }
-                                 );
-                            }
-                         }()
-                           .Catch(
-                             [id = std::string{id},
-                              this](js::SerializableException const& exc) -> ::Promise<void> {
-                                co_return Dispatch(
-                                  [id = js::Serialize(id), exception = exc.Serialize(), this]() {
-                                     Eval(
-                                       "window.__webview__.onReply(" + id + ", 1, "
-                                       + js::Serialize(exception) + ")"
-                                     );
-                                  }
-                                );
-                             }
-                           )
-                           .Catch(
-                             [id = std::string{id},
-                              this](std::exception const& exc) -> ::Promise<void> {
-                                co_return Dispatch([id = js::Serialize(id),
-                                                    exception =
-                                                      js::Serialize<std::string_view>(exc.what()),
-                                                    this]() {
-                                   Eval(
-                                     "window.__webview__.onReply(" + id + ", 1, "
-                                     + js::Serialize(exception) + ")"
-                                   );
-                                });
-                             }
-                           )
-                           .Catch(
-                             [id = std::string{id}, this](std::exception_ptr) -> ::Promise<void> {
-                                co_return Dispatch([id = js::Serialize(id), this]() {
-                                   Eval(
-                                     "window.__webview__.onReply(" + id + ", 1, "
-                                     + js::Serialize<std::string_view>(R"("unknown exception")")
-                                     + ")"
-                                   );
-                                });
-                             }
-                           )
-                           .Then([this, &ended, id = std::string{id}]() -> ::Promise<void> {
-                              // Cleanup
-
-                              std::unique_lock lock{promises_.mutex_};
-                              auto             elem = promises_.handles_.find(id);
-
-                              if (elem != promises_.handles_.end()) {
-                                 static_cast<::Promise<void>&&>(*elem->second.release()).Detach();
-
-                                 promises_.handles_.erase(elem);
-                              } else {
-                                 // Not Saved
-                                 ended = true;
-                              }
-
-                              co_return;
-                           })
-                       };
-
-                       // Save promise if not ended
-                       std::unique_lock lock{promises_.mutex_};
-
-                       if (!ended) {
 #ifndef NDEBUG
-                          auto const& [_, emplaced] =
+                  auto const& [_, emplaced] =
 #endif  // !NDEBUG
-                            promises_.handles_.emplace(
-                              id, static_cast<::Promise<void>&&>(wrapper).ToPointer()
-                            );
-                          assert(emplaced);
-                       }
-                    },
-                    args
-                  );
+                    promises_.handles_.emplace(id, std::move(wrapper));
+                  assert(emplaced);
+
                } catch (js::SerializableException const& exc) {
                   Dispatch([id = js::Serialize(id), exception = exc.Serialize(), this]() {
                      Eval(
-                       "window.__webview__.onReply(" + id + ", 1, " + js::Serialize(exception) + ")"
+                       R"(window.__webview__.onReply({}, true, {}, "{}"))",
+                       id,
+                       js::Serialize(exception),
+                       nonce_
                      );
                   });
                } catch (std::exception const& exc) {
@@ -185,14 +197,18 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                             exception = js::Serialize(std::string_view{exc.what()}),
                             this]() {
                      Eval(
-                       "window.__webview__.onReply(" + id + ", 1, " + js::Serialize(exception) + ")"
+                       R"(window.__webview__.onReply({}, true, {}, "{}"))",
+                       id,
+                       js::Serialize(exception),
+                       nonce_
                      );
                   });
                } catch (...) {
                   Dispatch([id = js::Serialize(id), this]() {
                      Eval(
-                       "window.__webview__.onReply(" + id + ", 1, "
-                       + js::Serialize<std::string_view>(R"("unknown exception")") + ")"
+                       R"(window.__webview__.onReply({}, true, "unknown exception", "{}"))",
+                       id,
+                       nonce_
                      );
                   });
                }
@@ -206,11 +222,91 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 
    // Notify that a binding was created if the init script has already
    // set things up.
-   Eval(std::format(
+   Eval(
      R"(if (window.__webview__) {{
-       window.__webview__.onBind({})
-    }})",
-     js::Serialize(name)
-   ));
+       window.__webview__.onBind({}, "{}")
+   }})",
+     js::Serialize(name),
+     nonce_
+   );
 }
+
+template <class RETURN, class... ARGS>
+auto&
+Webview::Call(std::string_view name, ARGS&&... args) {
+   if (promises_.done_) {
+      throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
+   }
+
+   auto const id = utils::Nonce() + utils::Nonce(++next_id_);
+
+   Reject const* reject_ptr;
+   auto          promise =
+     MakePromise(
+       [this, id, &reject_ptr](
+         Resolve<RETURN> const& resolve, Reject const& reject
+       ) -> Promise<RETURN, true> {
+          reject_ptr = &reject;
+
+          Dispatch([this, id, &resolve, &reject]() constexpr {
+             reverse_bindings_.emplace(
+               id,
+               std::make_shared<reverse_binding_t>([&reject,
+                                                    &resolve](bool error, std::string_view result) {
+                  if (error) {
+                     MakeReject<Exception>(reject, error_t::WEBVIEW_ERROR_REJECT, result);
+                  } else {
+                     resolve(js::Parse<RETURN>(result));
+                  }
+               })
+             );
+          });
+          co_return;
+       }
+     ).Then([this, id = std::string{id}](RETURN const& result) -> ::Promise<RETURN> {
+        // Cleanup
+
+        Dispatch([this, id]() constexpr {
+           auto elem = promises_.handles_.find(id);
+
+           if (elem != promises_.handles_.end()) {
+              // Detach the promise, as there is a slight chance that dispatch might be
+              // executed before the promise completes
+              std::move(elem->second).Detach();
+              promises_.handles_.erase(elem);
+           } else {
+              assert(false);
+           }
+        });
+
+        co_return result;
+     });
+
+#ifndef NDEBUG
+   auto const& [result, emplaced] =
+#endif  // !NDEBUG
+     promises_.handles_.emplace(id, Promises::Cleaner{std::move(promise), reject_ptr});
+   assert(emplaced);
+
+   std::tuple arguments{std::forward<ARGS>(args)...};
+
+   Eval(
+     R"(if (window.__webview__) {{
+        window.__webview__.reverseCall({}, "{}", "{}", {})
+    }})",
+     js::Serialize(name),
+     id,
+     nonce_,
+     js::Serialize(arguments)
+   );
+
+   return result->second.Promise<::Promise<RETURN>>();
+}
+
+template <class... ARGS>
+constexpr void
+Webview::Eval(std::format_string<ARGS...> js, ARGS&&... args) {
+   return Eval(std::format(std::move(js), std::forward<ARGS>(args)...));
+}
+
 }  // namespace webview

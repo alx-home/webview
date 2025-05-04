@@ -64,7 +64,9 @@ enum class error_t {
    /// Signifies that something already Exists.
    WEBVIEW_ERROR_DUPLICATE = 1,
    /// Signifies that something does not exist.
-   WEBVIEW_ERROR_NOT_FOUND = 2
+   WEBVIEW_ERROR_NOT_FOUND = 2,
+   /// Signifies that a promise has been rejected.
+   WEBVIEW_ERROR_REJECT = 3
 };
 
 class ErrorInfo {

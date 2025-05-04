@@ -27,10 +27,18 @@
 
 #include "../http.h"
 #include "promise/promise.h"
+#include "utils/Nonce.h"
 #include "user_script.h"
 
+#include <chrono>
+#include <coroutine>
+#include <format>
 #include <list>
+#include <memory>
 #include <shared_mutex>
+#include <sstream>
+#include <stdexcept>
+#include <thread>
 #include <unordered_map>
 #include <atomic>
 #include <functional>
@@ -68,8 +76,9 @@ enum class Hint {
    STATIC
 };
 
-using url_handler_t = std::function<http::response_t(http::request_t const& request)>;
-using binding_t     = std::function<void(std::string_view id, std::string_view args)>;
+using url_handler_t     = std::function<http::response_t(http::request_t const& request)>;
+using binding_t         = std::function<void(std::string_view id, std::string_view args)>;
+using reverse_binding_t = std::function<void(bool error, std::string_view result)>;
 
 class Webview {
 public:
@@ -82,8 +91,12 @@ public:
    virtual void
    RegisterUrlHandlers(std::vector<std::string_view> const& filters, url_handler_t handler) = 0;
 
-   template <class PROMISE> void Bind(std::string_view name, PROMISE&& promise);
-   void                          Unbind(std::string_view name);
+   template <class PROMISE>
+   void Bind(std::string_view name, PROMISE&& promise);
+   void Unbind(std::string_view name);
+
+   template <class RETURN, class... ARGS>
+   auto& Call(std::string_view name, ARGS&&... args);
 
    virtual void Run()                             = 0;
    virtual void Terminate()                       = 0;
@@ -114,9 +127,12 @@ public:
 
    void Init(std::string_view js);
 
-   virtual void Eval(std::string_view js) = 0;
-   virtual void OpenDevTools()            = 0;
-   virtual void InstallResourceHandler()  = 0;
+   template <class... ARGS>
+   constexpr void Eval(std::format_string<ARGS...> js, ARGS&&... args);
+   virtual void   Eval(std::string_view js) = 0;
+
+   virtual void OpenDevTools()           = 0;
+   virtual void InstallResourceHandler() = 0;
 
    virtual user_script* AddUserScript(std::string_view js);
 
@@ -139,23 +155,55 @@ protected:
 
    virtual void OnWindowDestroyed(bool skip_termination = false);
 
+   std::string_view GetNonce() const;
+
 private:
    static std::atomic_uint& WindowRefCount();
    static unsigned int      IncWindowCount();
    static unsigned int      DecWindowCount();
 
+   template <class PROMISE, class... ARGS>
+   auto MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args);
+
    using bindings_t = std::unordered_map<std::string, std::shared_ptr<binding_t>>;
-   bindings_t             bindings_{};
+   bindings_t bindings_{};
+   using reverse_bindings_t = std::unordered_map<std::string, std::shared_ptr<reverse_binding_t>>;
+   reverse_bindings_t reverse_bindings_{};
+
    user_script*           bind_script_{};
    std::list<user_script> user_scripts_{};
    std::function<void()>  on_terminate_{};
 
+   std::string nonce_{utils::Nonce() + utils::Nonce()};
+   std::size_t next_id_{0};
+
    struct Promises {
       using Id = std::string;
-      std::unordered_map<Id, promise::Pointer> handles_{};
-      std::mutex                               mutex_{};
-      std::shared_mutex                        done_mutex_{};
-      bool                                     done_{};
+
+      struct Cleaner {
+         template <class PROMISE>
+         Cleaner(PROMISE&&, promise::Reject const* reject = nullptr);
+
+         bool await_ready();
+         void await_suspend(std::coroutine_handle<>);
+         void await_resume();
+
+         void Detach() &&;
+
+         template <class EXCEPTION, class... ARGS>
+         void Reject(ARGS&&... args);
+
+         template <class PROMISE>
+         PROMISE& Promise();
+
+      private:
+         std::unique_ptr<promise::VPromise> promise_{};
+         promise::Reject const*             reject_{nullptr};
+         bool                               detached_{false};
+      };
+
+      std::unordered_map<Id, Cleaner> handles_{};
+      bool                            done_{};
 
       ~Promises();
    };

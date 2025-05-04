@@ -1137,9 +1137,16 @@ Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
    if (res != S_OK) {
       throw Exception{error_t::WEBVIEW_ERROR_UNSPECIFIED, "put_IsStatusBarEnabled failed"};
    }
-   AddInitScript(R"_(function(message) {
-   return window.chrome.webview.postMessage(message);
-})_");
+   AddInitScript(std::format(
+     R"_(function(message, nonce) {{
+         if (nonce != "{}") {{
+            throw new Error('Invalid nonce \"' + nonce + '\"');
+         }}
+
+         return window.chrome.webview.postMessage(message);
+   }})_",
+     GetNonce()
+   ));
    ResizeWebview();
    controller_->put_IsVisible(true);
    ShowWindow(widget_, SW_SHOW);

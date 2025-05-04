@@ -33,7 +33,9 @@
 #include <exception>
 #include <format>
 #include <mutex>
+#include <tuple>
 #include <utility>
+#include <variant>
 #include <json/json.h>
 
 namespace webview {
@@ -68,12 +70,13 @@ Webview::Unbind(std::string_view name) {
 
    // Notify that a binding was created if the init script has already
    // set things up.
-   Eval(std::format(
+   Eval(
      R"(if (window.__webview__) {{
-    window.__webview__.onUnbind({})
+    window.__webview__.onUnbind({}, "{}")
 }})",
-     js::Serialize(name)
-   ));
+     js::Serialize(name),
+     nonce_
+   );
 }
 
 void
@@ -136,27 +139,79 @@ Webview::CreateInitScript(std::string_view post_fn) {
       var _promises = {{}};
       function Webview_() {{}}
 
-      Webview_.prototype.post = function(message) {{
-         return ({})(message);
+      Webview_.prototype.post = function(message, nonce) {{
+         return ({0})(message, nonce);
       }};
 
-      Webview_.prototype.call = function(method) {{
+      Webview_.prototype.call = function(method, nonce) {{
+         if (nonce != "{1}") {{
+            throw new Error('Invalid nonce \"' + nonce + '\"');
+         }}
+
          var _id = generateId();
-         var _params = Array.prototype.slice.call(arguments, 1);
+         var _params = Array.prototype.slice.call(arguments, 2);
          var promise = new Promise(function(resolve, reject) {{
             _promises[_id] = {{ resolve, reject }};
          }});
 
          this.post(JSON.stringify({{
-            id: _id,
-            method: method,
-            params: JSON.stringify(_params)
-         }}));
+               nonce: nonce,
+               reverse: false,
+               id: _id,
+               method: method,
+               params: JSON.stringify(_params)
+            }}),
+            nonce);
 
          return promise;
       }};
 
-      Webview_.prototype.onReply = function(id, status, result) {{
+      console.error("toto")
+      Webview_.prototype.reverseCall = function(method, _id, nonce, _params) {{
+         if (nonce != "{1}") {{
+            throw new Error('Invalid nonce \"' + nonce + '\"');
+         }}
+
+         if (!window.hasOwnProperty(method)) {{
+            this.post(JSON.stringify({{
+                  nonce: nonce,
+                  reverse: true,
+                  id: _id,
+                  method: method,
+                  error: true,
+                  result: JSON.stringify('Property \"' + method + '\" doesn\'t exists')
+               }}),
+               nonce);
+         }} else {{
+            window[method].apply(null, _params).then((result) => {{
+               this.post(JSON.stringify({{
+                     nonce: nonce,
+                     reverse: true,
+                     id: _id,
+                     method: method,
+                     error: false,
+                     result: JSON.stringify(result)
+                  }}),
+                  nonce);
+            }}).catch((error) => {{
+               this.post(JSON.stringify({{
+                     nonce: nonce,
+                     reverse: true,
+                     id: _id,
+                     method: method,
+                     error: true,
+                     result: JSON.stringify(error)
+                  }}),
+                  nonce);
+            }});
+         }}
+      }}
+
+      Webview_.prototype.onReply = function(id, error, result, nonce) {{
+         if (nonce != "{1}") {{
+            throw new Error('Invalid nonce \"' + nonce + '\"');
+         }}
+
          var promise = _promises[id];
          if (result !== undefined) {{
             try {{
@@ -167,28 +222,36 @@ Webview::CreateInitScript(std::string_view post_fn) {
             }}
          }}
 
-         if (status === 0) {{
-            promise.resolve(result);
-         }} else {{
+         if (error) {{
             promise.reject(result);
+         }} else {{
+            promise.resolve(result);
          }}
       }};
 
-      Webview_.prototype.onBind = function(name) {{
+      Webview_.prototype.onBind = function(name, nonce) {{
+         if (nonce != "{1}") {{
+            throw new Error('Invalid nonce \"' + nonce + '\"');
+         }}
+
          if (window.hasOwnProperty(name)) {{
             throw new Error('Property \"' + name + '\" already Exists');
          }}
 
          window[name] = (function() {{
-            var params = [name].concat(Array.prototype.slice.call(arguments));
+            var params = [name, nonce].concat(Array.prototype.slice.call(arguments));
             return Webview_.prototype.call.apply(this, params);
          }}).bind(this);
       }};
 
-      Webview_.prototype.onUnbind = function(name) {{
+      Webview_.prototype.onUnbind = function(name, nonce) {{
+         if (nonce != "{1}") {{
+            throw new Error('Invalid nonce \"' + nonce + '\"');
+         }}
          if (!window.hasOwnProperty(name)) {{
             throw new Error('Property \"' + name + '\" does not exist');
          }}
+
          delete window[name];
       }};
 
@@ -197,7 +260,8 @@ Webview::CreateInitScript(std::string_view post_fn) {
   
    window.__webview__ = new Webview();
 }})())",
-     post_fn
+     post_fn,
+     nonce_
    );
 }
 
@@ -221,32 +285,98 @@ Webview::CreateBindScript() {
     var methods = {};
 
     methods.forEach(function(name) {{
-        window.__webview__.onBind(name);
+        window.__webview__.onBind(name, "{}");
     }});
 }})())",
-     js_names
+     js_names,
+     nonce_
    );
 }
 
-struct Message {
+struct Header {
+   std::string nonce_;
+   bool        reverse_;
    std::string id_;
    std::string name_;
-   std::string params_;
 
    static constexpr js::Proto PROTOTYPE{
-     js::_{"id", &Message::id_},
-     js::_{"method", &Message::name_},
-     js::_{"params", &Message::params_}
+     js::_{"nonce", &Header::nonce_},
+     js::_{"reverse", &Header::reverse_},
+     js::_{"id", &Header::id_},
+     js::_{"method", &Header::name_},
    };
 };
 
+struct ReplyMessage : Header {
+   std::string params_;
+
+   static constexpr js::Proto PROTOTYPE{
+     std::tuple_cat(
+       Header::PROTOTYPE,
+       js::Proto{
+         js::_{"params", &ReplyMessage::params_},
+       }
+     ),
+   };
+};
+
+struct ReverseMessage : Header {
+   bool        error_;
+   std::string result_;
+
+   static constexpr js::Proto PROTOTYPE{
+     std::tuple_cat(
+       Header::PROTOTYPE,
+       js::Proto{
+         js::_{"error", &ReverseMessage::error_},
+         js::_{"result", &ReverseMessage::result_},
+       }
+     ),
+   };
+};
+
+using Message = std::variant<ReverseMessage, ReplyMessage>;
+
 void
 Webview::OnMessage(std::string_view msg_) {
-   auto msg = js::Parse<Message>(msg_);
+   auto const check_header = [this](auto msg) constexpr {
+      if (msg.nonce_ != nonce_) {
+         std::cerr << "Invalid nonce !" << std::endl;
+         // ignoring
+         return false;
+      }
+      return true;
+   };
 
-   auto const& create_promise = bindings_.at(std::string{msg.name_});
+   auto vmsg = js::Parse<Message>(msg_);
 
-   Dispatch([create_promise, msg = std::move(msg)]() { (*create_promise)(msg.id_, msg.params_); });
+   if (std::holds_alternative<ReplyMessage>(vmsg)) {
+      auto const& msg = std::get<ReplyMessage>(vmsg);
+      if (check_header(msg)) {
+         assert(!msg.reverse_);
+
+         auto const& create_promise = bindings_.at(std::string{msg.name_});
+
+         Dispatch([create_promise, id = std::string{msg.id_}, params = std::string{msg.params_}]() {
+            (*create_promise)(id, params);
+         });
+      }
+   } else {
+      auto const& msg = std::get<ReverseMessage>(vmsg);
+      if (check_header(msg)) {
+         assert(msg.reverse_);
+
+         if (auto elem = reverse_bindings_.find(std::string{msg.id_});
+             elem != reverse_bindings_.end()) {
+            auto make_reply = std::move(elem->second);
+            reverse_bindings_.erase(elem);
+
+            Dispatch([make_reply, error = msg.error_, result = std::string{msg.result_}]() {
+               (*make_reply)(error, result);
+            });
+         }
+      }
+   }
 }
 
 void
@@ -261,6 +391,11 @@ Webview::OnWindowDestroyed(bool skip_termination) {
    }
 
    on_terminate_();
+}
+
+std::string_view
+Webview::GetNonce() const {
+   return nonce_;
 }
 
 std::atomic_uint&
@@ -283,17 +418,39 @@ Webview::DecWindowCount() {
    return 0;
 }
 
+bool
+Webview::Promises::Cleaner::await_ready() {
+   if (detached_) {
+      return true;
+   } else {
+      return promise_->VAwait().await_ready();
+   }
+}
+void
+Webview::Promises::Cleaner::await_suspend(std::coroutine_handle<> h) {
+   if (!detached_) {
+      promise_->VAwait().await_suspend(h);
+   }
+}
+void
+Webview::Promises::Cleaner::await_resume() {
+   if (!detached_) {
+      promise_->VAwait().await_resume();
+   }
+}
+
+void
+Webview::Promises::Cleaner::Detach() && {
+   assert(!detached_);
+   detached_    = true;
+   reject_      = nullptr;
+   auto promise = std::move(promise_);
+   std::move(*promise).VDetach();
+}
+
 Webview::Promises::~Promises() {
-   std::unique_lock _{done_mutex_};
-
-   auto handles = [this]() constexpr {
-      std::unique_lock lock{mutex_};
-      done_        = true;
-      auto handles = std::move(handles_);
-      lock.unlock();
-
-      return handles;
-   }();
+   done_        = true;
+   auto handles = std::move(handles_);
 
    std::condition_variable cv{};
    std::mutex              mutex;
@@ -315,7 +472,10 @@ Webview::Promises::~Promises() {
 
       for (auto& handle : handles) {
          try {
-            co_await handle.second->Await();
+            handle.second.Reject<Exception>(
+              error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating"
+            );
+            co_await handle.second;
          } catch (std::exception const& e) {
             std::cerr << e.what() << std::endl;
          }
