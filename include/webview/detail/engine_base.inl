@@ -282,11 +282,9 @@ Webview::Call(std::string_view name, ARGS&&... args) {
         co_return result;
      });
 
-#ifndef NDEBUG
-   auto const& [result, emplaced] =
-#endif  // !NDEBUG
+   auto const& [result, _] =
      promises_.handles_.emplace("call_" + id, Promises::Cleaner{std::move(promise), reject_ptr});
-   assert(emplaced);
+   assert(_);
 
    std::tuple arguments{std::forward<ARGS>(args)...};
 
