@@ -166,7 +166,6 @@ Webview::CreateInitScript(std::string_view post_fn) {
          return promise;
       }};
 
-      console.error("toto")
       Webview_.prototype.reverseCall = function(method, _id, nonce, _params) {{
          if (nonce != "{1}") {{
             throw new Error('Invalid nonce \"' + nonce + '\"');
