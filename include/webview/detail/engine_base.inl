@@ -240,30 +240,10 @@ Webview::Call(std::string_view name, ARGS&&... args) {
 
    auto const id = utils::Nonce() + utils::Nonce(++next_id_);
 
-   Reject const* reject_ptr;
-   auto          promise =
-     MakePromise(
-       [this, id, &reject_ptr](
-         Resolve<RETURN> const& resolve, Reject const& reject
-       ) -> Promise<RETURN, true> {
-          reject_ptr = &reject;
+   auto [ppromise, resolve, reject] = promise::Pure<RETURN>();
 
-          Dispatch([this, id, &resolve, &reject]() constexpr {
-             reverse_bindings_.emplace(
-               id,
-               std::make_shared<reverse_binding_t>([&reject,
-                                                    &resolve](bool error, std::string_view result) {
-                  if (error) {
-                     MakeReject<Exception>(reject, error_t::WEBVIEW_ERROR_REJECT, result);
-                  } else {
-                     resolve(js::Parse<RETURN>(result));
-                  }
-               })
-             );
-          });
-          co_return;
-       }
-     ).Then([this, id = std::string{id}](RETURN const& result) -> ::Promise<RETURN> {
+   auto promise = std::move(ppromise).Then(
+     [this, id = std::string{id}](RETURN const& result) -> ::Promise<RETURN> {
         // Cleanup
 
         Dispatch([this, id]() constexpr {
@@ -280,10 +260,22 @@ Webview::Call(std::string_view name, ARGS&&... args) {
         });
 
         co_return result;
-     });
+     }
+   );
+
+   reverse_bindings_.emplace(
+     id,
+     std::make_shared<reverse_binding_t>([reject, resolve](bool error, std::string_view result) {
+        if (error) {
+           MakeReject<Exception>(*reject, error_t::WEBVIEW_ERROR_REJECT, result);
+        } else {
+           (*resolve)(js::Parse<RETURN>(result));
+        }
+     })
+   );
 
    auto const& [result, _] =
-     promises_.handles_.emplace("call_" + id, Promises::Cleaner{std::move(promise), reject_ptr});
+     promises_.handles_.emplace("call_" + id, Promises::Cleaner{std::move(promise), reject});
    assert(_);
 
    std::tuple arguments{std::forward<ARGS>(args)...};
