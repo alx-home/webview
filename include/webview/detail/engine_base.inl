@@ -70,19 +70,19 @@ Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
         if constexpr (std::is_void_v<return_t>) {
            return MakePromise(promise, std::forward<ARGS>(args)...)
              .Then([id = std::string{id}, this]() -> ::Promise<void> {
-                co_return Dispatch([id = js::Serialize(id), this]() {
+                co_return Dispatch([id = js::Stringify(id), this]() {
                    Eval(R"(window.__webview__.onReply({}, false, undefined, "{}"))", id, nonce_);
                 });
              });
         } else {
            return MakePromise(promise, std::forward<ARGS>(args)...)
              .Then([id{std::string{id}}, this](return_t const& result) -> ::Promise<void> {
-                co_return Dispatch([id = js::Serialize(id), result = js::Serialize(result), this](
+                co_return Dispatch([id = js::Stringify(id), result = js::Stringify(result), this](
                                    ) {
                    Eval(
                      R"(window.__webview__.onReply({}, false, {}, "{}"))",
                      id,
-                     js::Serialize(result),
+                     js::Stringify(result),
                      nonce_
                    );
                 });
@@ -91,30 +91,30 @@ Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
      }()
        .Catch(
          [id = std::string{id}, this](js::SerializableException const& exc) -> ::Promise<void> {
-            co_return Dispatch([id = js::Serialize(id), exception = exc.Serialize(), this]() {
+            co_return Dispatch([id = js::Stringify(id), exception = exc.Stringify(), this]() {
                Eval(
                  R"(window.__webview__.onReply({}, true, {}, "{}"))",
                  id,
-                 js::Serialize(exception),
+                 js::Stringify(exception),
                  nonce_
                );
             });
          }
        )
        .Catch([id = std::string{id}, this](std::exception const& exc) -> ::Promise<void> {
-          co_return Dispatch([id        = js::Serialize(id),
-                              exception = js::Serialize<std::string_view>(exc.what()),
+          co_return Dispatch([id        = js::Stringify(id),
+                              exception = js::Stringify(std::string_view{exc.what()}),
                               this]() {
              Eval(
                R"(window.__webview__.onReply({}, true, {}, "{}"))",
                id,
-               js::Serialize(exception),
+               js::Stringify(exception),
                nonce_
              );
           });
        })
        .Catch([id = std::string{id}, this](std::exception_ptr) -> ::Promise<void> {
-          co_return Dispatch([id = js::Serialize(id), this]() {
+          co_return Dispatch([id = js::Stringify(id), this]() {
              Eval(R"(window.__webview__.onReply({}, true, "unknown exception", "{}"))", id, nonce_);
           });
        })
@@ -149,11 +149,11 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                using args_t = promise::args_t<decltype(promise)>;
 
                if (promises_.done_) {
-                  return Dispatch([id = js::Serialize(id), this]() {
+                  return Dispatch([id = js::Stringify(id), this]() {
                      Eval(
                        R"(window.__webview__.onReply({}, true, {}, "{}"))",
                        id,
-                       js::Serialize<std::string_view>("Terminated webview !"),
+                       js::Stringify(std::string_view{"Terminated webview !"}),
                        nonce_
                      );
                   });
@@ -184,27 +184,27 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                   assert(emplaced);
 
                } catch (js::SerializableException const& exc) {
-                  Dispatch([id = js::Serialize(id), exception = exc.Serialize(), this]() {
+                  Dispatch([id = js::Stringify(id), exception = exc.Stringify(), this]() {
                      Eval(
                        R"(window.__webview__.onReply({}, true, {}, "{}"))",
                        id,
-                       js::Serialize(exception),
+                       js::Stringify(exception),
                        nonce_
                      );
                   });
                } catch (std::exception const& exc) {
-                  Dispatch([id        = js::Serialize(id),
-                            exception = js::Serialize(std::string_view{exc.what()}),
+                  Dispatch([id        = js::Stringify(id),
+                            exception = js::Stringify(std::string_view{exc.what()}),
                             this]() {
                      Eval(
                        R"(window.__webview__.onReply({}, true, {}, "{}"))",
                        id,
-                       js::Serialize(exception),
+                       js::Stringify(exception),
                        nonce_
                      );
                   });
                } catch (...) {
-                  Dispatch([id = js::Serialize(id), this]() {
+                  Dispatch([id = js::Stringify(id), this]() {
                      Eval(
                        R"(window.__webview__.onReply({}, true, "unknown exception", "{}"))",
                        id,
@@ -226,7 +226,7 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
      R"(if (window.__webview__) {{
        window.__webview__.onBind({}, "{}")
    }})",
-     js::Serialize(name),
+     js::Stringify(name),
      nonce_
    );
 }
@@ -284,10 +284,10 @@ Webview::Call(std::string_view name, ARGS&&... args) {
      R"(if (window.__webview__) {{
         window.__webview__.reverseCall({}, "{}", "{}", {})
     }})",
-     js::Serialize(name),
+     js::Stringify(name),
      id,
      nonce_,
-     js::Serialize(arguments)
+     js::Stringify(arguments)
    );
 
    return result->second.Promise<::Promise<RETURN>>();

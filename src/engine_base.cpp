@@ -74,7 +74,7 @@ Webview::Unbind(std::string_view name) {
      R"(if (window.__webview__) {{
     window.__webview__.onUnbind({}, "{}")
 }})",
-     js::Serialize(name),
+     js::Stringify(name),
      nonce_
    );
 }
@@ -274,7 +274,7 @@ Webview::CreateBindScript() {
       } else {
          js_names += ",";
       }
-      js_names += js::Serialize(binding.first);
+      js_names += js::Stringify(binding.first);
    }
    js_names += "]";
 
