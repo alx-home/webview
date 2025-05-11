@@ -501,8 +501,8 @@ Win32EdgeEngine::Win32EdgeEngine(
       switch (msg) {
          case WM_APP:
             if (auto f = reinterpret_cast<std::function<void()>*>(lp); f) {
+               auto _ = std::unique_ptr<std::function<void()>>(f);
                (*f)();
-               delete f;
             }
             break;
          case WM_DESTROY:
