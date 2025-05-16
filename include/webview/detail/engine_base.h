@@ -158,6 +158,29 @@ protected:
    std::string_view GetNonce() const;
 
 private:
+   struct Promises;
+   class PromisesCleaner {
+   private:
+      PromisesCleaner(std::unique_ptr<Promises> promises);
+
+   public:
+      ~PromisesCleaner();
+
+   private:
+      std::unique_ptr<Promises> promises_;
+      std::condition_variable   cv_{};
+      std::mutex                mutex_{};
+      bool                      done_ = false;
+
+      Promise<> prom_waiter_;
+
+      friend class Webview;
+   };
+
+protected:
+   PromisesCleaner CleanPromises();
+
+private:
    static std::atomic_uint& WindowRefCount();
    static unsigned int      IncWindowCount();
    static unsigned int      DecWindowCount();
@@ -182,7 +205,7 @@ private:
 
       struct Cleaner {
          template <class PROMISE>
-         Cleaner(PROMISE&&, promise::Reject const* reject = nullptr);
+         Cleaner(std::string_view name, PROMISE&&, promise::Reject const* reject = nullptr);
 
          bool await_ready();
          void await_suspend(std::coroutine_handle<>);
@@ -197,19 +220,17 @@ private:
          PROMISE& Promise();
 
       private:
+         std::string                        name_{};
          std::unique_ptr<promise::VPromise> promise_{};
          promise::Reject const*             reject_{nullptr};
          bool                               detached_{false};
       };
 
       std::unordered_map<Id, Cleaner> handles_{};
-      bool                            done_{};
-
-      ~Promises();
    };
 
    // Must stays at the end !
-   Promises promises_{};
+   std::unique_ptr<Promises> promises_{std::make_unique<Promises>()};
 };
 
 }  // namespace webview

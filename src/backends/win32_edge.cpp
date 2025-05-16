@@ -537,16 +537,22 @@ Win32EdgeEngine::~Win32EdgeEngine() {
    auto wndproc = reinterpret_cast<LONG_PTR>(+[](HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       return DefWindowProcW(hwnd, msg, wp, lp);
    });
-   if (message_window_) {
 
-      if (owns_window_) {
-         // Not strictly needed for windows to close immediately but aligns
-         // behavior across backends.
-         DepleteRunLoopEventQueue();
+   {
+      auto cleaner = CleanPromises();
+      assert(message_window_);
+
+      if (message_window_) {
+
+         if (owns_window_) {
+            // Not strictly needed for windows to close immediately but aligns
+            // behavior across backends.
+            DepleteRunLoopEventQueue();
+         }
+         // We need the message window in order to deplete the event queue.
+         SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
+         DestroyWindow(message_window_);
       }
-      // We need the message window in order to deplete the event queue.
-      SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
-      DestroyWindow(message_window_);
    }
 
    if (com_handler_) {

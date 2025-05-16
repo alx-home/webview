@@ -447,16 +447,9 @@ Webview::Promises::Cleaner::Detach() && {
    std::move(*promise).VDetach();
 }
 
-Webview::Promises::~Promises() {
-   done_        = true;
-   auto handles = std::move(handles_);
-
-   std::condition_variable cv{};
-   std::mutex              mutex;
-   bool                    done = false;
-
-   // await all unhandled promises
-   auto prom_waiter = MakePromise([&handles, &cv, &done, &mutex]() -> Promise<void> {
+Webview::PromisesCleaner::PromisesCleaner(std::unique_ptr<Promises> promises)
+   : promises_(std::move(promises))
+   , prom_waiter_(MakePromise([this]() -> Promise<void> {
       struct Done {
          std::condition_variable& cv_;
          std::mutex&              mutex_;
@@ -467,9 +460,9 @@ Webview::Promises::~Promises() {
             done_ = true;
             cv_.notify_all();
          }
-      } _{.cv_ = cv, .mutex_ = mutex, .done_ = done};
+      } _{.cv_ = cv_, .mutex_ = mutex_, .done_ = done_};
 
-      for (auto& handle : handles) {
+      for (auto& handle : promises_->handles_) {
          try {
             handle.second.Reject<Exception>(
               error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating"
@@ -481,14 +474,22 @@ Webview::Promises::~Promises() {
       }
 
       co_return;
-   });
+   })) {}
 
-   std::unique_lock lock{mutex};
-   if (!done) {
-      cv.wait(lock);
+Webview::PromisesCleaner::~PromisesCleaner() {
+   std::unique_lock lock{mutex_};
+   if (!done_) {
+      cv_.wait(lock);
    }
 
-   assert(prom_waiter.Done());
-   assert(!prom_waiter.Exception());
+   assert(prom_waiter_.Done());
+   assert(!prom_waiter_.Exception());
 }
+
+Webview::PromisesCleaner
+Webview::CleanPromises() {
+   assert(promises_);
+   return PromisesCleaner{std::move(promises_)};
+}
+
 }  // namespace webview

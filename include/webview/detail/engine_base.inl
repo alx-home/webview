@@ -41,8 +41,13 @@
 
 namespace webview {
 template <class PROMISE>
-Webview::Promises::Cleaner::Cleaner(PROMISE&& promise, promise::Reject const* reject)
-   : promise_(std::make_unique<PROMISE>(std::move(promise)))
+Webview::Promises::Cleaner::Cleaner(
+  std::string_view       name,
+  PROMISE&&              promise,
+  promise::Reject const* reject
+)
+   : name_{name}
+   , promise_(std::make_unique<PROMISE>(std::move(promise)))
    , reject_{reject} {}
 
 template <class EXCEPTION, class... ARGS>
@@ -122,13 +127,14 @@ Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
           // Cleanup
 
           Dispatch([this, id]() constexpr {
-             auto elem = promises_.handles_.find("bind_" + id);
+             assert(promises_);
+             auto elem = promises_->handles_.find("bind_" + id);
 
-             if (elem != promises_.handles_.end()) {
+             if (elem != promises_->handles_.end()) {
                 // Detach the promise, as there is a slight chance that dispatch might be
                 // executed before the promise completes
                 std::move(elem->second).Detach();
-                promises_.handles_.erase(elem);
+                promises_->handles_.erase(elem);
              } else {
                 assert(false);
              }
@@ -143,12 +149,13 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
    if (!bindings_
           .emplace(
             name,
-            std::make_shared<binding_t>([this, promise = std::forward<PROMISE>(promise)](
-                                          std::string_view id, std::string_view js_args
-                                        ) {
+            std::make_shared<binding_t>([this,
+                                         name    = std::string{name},
+                                         promise = std::forward<PROMISE>(promise
+                                         )](std::string_view id, std::string_view js_args) {
                using args_t = promise::args_t<decltype(promise)>;
 
-               if (promises_.done_) {
+               if (!promises_) {
                   return Dispatch([id = js::Stringify(id), this]() {
                      Eval(
                        R"(window.__webview__.onReply({}, true, {}, "{}"))",
@@ -180,7 +187,9 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 #ifndef NDEBUG
                   auto const& [_, emplaced] =
 #endif  // !NDEBUG
-                    promises_.handles_.emplace("bind_" + std::string{id}, std::move(wrapper));
+                    promises_->handles_.emplace(
+                      "bind_" + std::string{id}, Promises::Cleaner{name, std::move(wrapper)}
+                    );
                   assert(emplaced);
 
                } catch (js::SerializableException const& exc) {
@@ -234,7 +243,7 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 template <class RETURN, class... ARGS>
 auto&
 Webview::Call(std::string_view name, ARGS&&... args) {
-   if (promises_.done_) {
+   if (!promises_) {
       throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
    }
 
@@ -247,13 +256,14 @@ Webview::Call(std::string_view name, ARGS&&... args) {
         // Cleanup
 
         Dispatch([this, id]() constexpr {
-           auto elem = promises_.handles_.find("call_" + id);
+           assert(promises_);
+           auto elem = promises_->handles_.find("call_" + id);
 
-           if (elem != promises_.handles_.end()) {
+           if (elem != promises_->handles_.end()) {
               // Detach the promise, as there is a slight chance that dispatch might be
               // executed before the promise completes
               std::move(elem->second).Detach();
-              promises_.handles_.erase(elem);
+              promises_->handles_.erase(elem);
            } else {
               assert(false);
            }
@@ -275,7 +285,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
    );
 
    auto const& [result, _] =
-     promises_.handles_.emplace("call_" + id, Promises::Cleaner{std::move(promise), reject});
+     promises_->handles_.emplace("call_" + id, Promises::Cleaner{name, std::move(promise), reject});
    assert(_);
 
    std::tuple arguments{std::forward<ARGS>(args)...};
