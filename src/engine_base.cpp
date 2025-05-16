@@ -310,12 +310,10 @@ struct ReplyMessage : Header {
    std::string params_;
 
    static constexpr js::Proto PROTOTYPE{
-     std::tuple_cat(
+     js::Extend{
        Header::PROTOTYPE,
-       js::Proto{
-         js::_{"params", &ReplyMessage::params_},
-       }
-     ),
+       js::_{"params", &ReplyMessage::params_},
+     },
    };
 };
 
@@ -324,13 +322,11 @@ struct ReverseMessage : Header {
    std::string result_;
 
    static constexpr js::Proto PROTOTYPE{
-     std::tuple_cat(
+     js::Extend{
        Header::PROTOTYPE,
-       js::Proto{
-         js::_{"error", &ReverseMessage::error_},
-         js::_{"result", &ReverseMessage::result_},
-       }
-     ),
+       js::_{"error", &ReverseMessage::error_},
+       js::_{"result", &ReverseMessage::result_},
+     },
    };
 };
 
