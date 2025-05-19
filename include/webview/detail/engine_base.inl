@@ -37,6 +37,7 @@
 #include <memory>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 namespace webview {
@@ -251,27 +252,49 @@ Webview::Call(std::string_view name, ARGS&&... args) {
 
    auto [ppromise, resolve, reject] = promise::Pure<RETURN>();
 
-   auto promise = std::move(ppromise).Then(
-     [this, id = std::string{id}](RETURN const& result) -> ::Promise<RETURN> {
-        // Cleanup
+   auto promise = [this, id, &ppromise]() constexpr {
+      if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
+         return std::move(ppromise).Then([this, id]() -> ::Promise<void> {
+            // Cleanup
 
-        Dispatch([this, id]() constexpr {
-           assert(promises_);
-           auto elem = promises_->handles_.find("call_" + id);
+            Dispatch([this, id]() constexpr {
+               assert(promises_);
+               auto elem = promises_->handles_.find("call_" + id);
 
-           if (elem != promises_->handles_.end()) {
-              // Detach the promise, as there is a slight chance that dispatch might be
-              // executed before the promise completes
-              std::move(elem->second).Detach();
-              promises_->handles_.erase(elem);
-           } else {
-              assert(false);
-           }
-        });
+               if (elem != promises_->handles_.end()) {
+                  // Detach the promise, as there is a slight chance that dispatch might be
+                  // executed before the promise completes
+                  std::move(elem->second).Detach();
+                  promises_->handles_.erase(elem);
+               } else {
+                  assert(false);
+               }
+            });
 
-        co_return result;
-     }
-   );
+            co_return;
+         });
+      } else {
+         return std::move(ppromise).Then([this, id](RETURN const& result) -> ::Promise<RETURN> {
+            // Cleanup
+
+            Dispatch([this, id]() constexpr {
+               assert(promises_);
+               auto elem = promises_->handles_.find("call_" + id);
+
+               if (elem != promises_->handles_.end()) {
+                  // Detach the promise, as there is a slight chance that dispatch might be
+                  // executed before the promise completes
+                  std::move(elem->second).Detach();
+                  promises_->handles_.erase(elem);
+               } else {
+                  assert(false);
+               }
+            });
+
+            co_return result;
+         });
+      }
+   };
 
    reverse_bindings_.emplace(
      id,
@@ -279,7 +302,11 @@ Webview::Call(std::string_view name, ARGS&&... args) {
         if (error) {
            MakeReject<Exception>(*reject, error_t::WEBVIEW_ERROR_REJECT, result);
         } else {
-           (*resolve)(js::Parse<RETURN>(result));
+           if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
+              (*resolve)();
+           } else {
+              (*resolve)(js::Parse<RETURN>(result));
+           }
         }
      })
    );
