@@ -1025,8 +1025,9 @@ void
 Win32EdgeEngine::Eval(std::string_view js) {
    // TODO: Skip if no content has begun loading yet. Can't check with
    //       ICoreWebView2::get_Source because it returns "about:blank".
-   auto wjs = utils::WidenString(js);
-   webview_->ExecuteScript(wjs.c_str(), nullptr);
+   Dispatch([this, wjs = utils::WidenString(js)]() constexpr {
+      webview_->ExecuteScript(wjs.c_str(), nullptr);
+   });
 }
 
 void

@@ -333,7 +333,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
 template <class... ARGS>
 constexpr void
 Webview::Eval(std::format_string<ARGS...> js, ARGS&&... args) {
-   return Eval(std::format(std::move(js), std::forward<ARGS>(args)...));
+   Eval(std::format(std::move(js), std::forward<ARGS>(args)...));
 }
 
 }  // namespace webview
