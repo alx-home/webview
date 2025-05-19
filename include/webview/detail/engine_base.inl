@@ -294,7 +294,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
             co_return result;
          });
       }
-   };
+   }();
 
    reverse_bindings_.emplace(
      id,
