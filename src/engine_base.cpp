@@ -318,8 +318,8 @@ struct ReplyMessage : Header {
 };
 
 struct ReverseMessage : Header {
-   bool        error_;
-   std::string result_;
+   bool                       error_;
+   std::optional<std::string> result_;
 
    static constexpr js::Proto PROTOTYPE{
      js::Extend{
@@ -366,7 +366,9 @@ Webview::OnMessage(std::string_view msg_) {
             auto make_reply = std::move(elem->second);
             reverse_bindings_.erase(elem);
 
-            Dispatch([make_reply, error = msg.error_, result = std::string{msg.result_}]() {
+            Dispatch([make_reply,
+                      error  = msg.error_,
+                      result = std::string{msg.result_ ? *msg.result_ : ""}]() {
                (*make_reply)(error, result);
             });
          }
