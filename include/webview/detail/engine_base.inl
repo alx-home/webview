@@ -29,7 +29,8 @@
 #include "utils/Nonce.h"
 #include "engine_base.h"
 
-#include <json/json.h>
+#include <json/json.inl>
+#include <json/exceptions.h>
 #include <promise/promise.h>
 
 #include <exception>
