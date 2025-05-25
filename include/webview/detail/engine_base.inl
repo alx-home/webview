@@ -249,7 +249,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
       throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
    }
 
-   auto const id = utils::Nonce() + utils::Nonce(++next_id_);
+   auto const id = std::to_string(++next_id_);
 
    auto [ppromise, resolve, reject] = promise::Pure<RETURN>();
 
