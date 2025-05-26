@@ -205,7 +205,11 @@ private:
 
       struct Cleaner {
          template <class PROMISE>
-         Cleaner(std::string_view name, PROMISE&&, promise::Reject const* reject = nullptr);
+         Cleaner(
+           std::string_view name,
+           PROMISE&&,
+           std::shared_ptr<promise::Reject> reject = nullptr
+         );
 
          bool await_ready();
          void await_suspend(std::coroutine_handle<>);
@@ -222,7 +226,7 @@ private:
       private:
          std::string                        name_{};
          std::unique_ptr<promise::VPromise> promise_{};
-         promise::Reject const*             reject_{nullptr};
+         std::shared_ptr<promise::Reject>   reject_{nullptr};
          bool                               detached_{false};
       };
 

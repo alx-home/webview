@@ -44,9 +44,9 @@
 namespace webview {
 template <class PROMISE>
 Webview::Promises::Cleaner::Cleaner(
-  std::string_view       name,
-  PROMISE&&              promise,
-  promise::Reject const* reject
+  std::string_view                 name,
+  PROMISE&&                        promise,
+  std::shared_ptr<promise::Reject> reject
 )
    : name_{name}
    , promise_(std::make_unique<PROMISE>(std::move(promise)))
