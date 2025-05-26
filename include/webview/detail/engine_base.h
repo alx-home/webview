@@ -233,6 +233,7 @@ private:
       std::unordered_map<Id, Cleaner> handles_{};
    };
 
+   std::shared_mutex mutex_{};
    // Must stays at the end !
    std::unique_ptr<Promises> promises_{std::make_unique<Promises>()};
 };

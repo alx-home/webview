@@ -486,8 +486,13 @@ Webview::PromisesCleaner::~PromisesCleaner() {
 
 Webview::PromisesCleaner
 Webview::CleanPromises() {
+   std::unique_lock lock{mutex_};
+
    assert(promises_);
-   return PromisesCleaner{std::move(promises_)};
+   auto promises = std::move(promises_);
+
+   lock.unlock();
+   return PromisesCleaner{std::move(promises)};
 }
 
 }  // namespace webview

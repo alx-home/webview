@@ -36,6 +36,7 @@
 #include <exception>
 #include <format>
 #include <memory>
+#include <shared_mutex>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -247,59 +248,69 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 template <class RETURN, class... ARGS>
 auto&
 Webview::Call(std::string_view name, ARGS&&... args) {
+   std::shared_lock lock{mutex_};
+
+   if (!promises_) {
+      // Webview terminated : MakeReject may not be called as Dispatch won't be ever depleted
+      throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
+   }
+
    auto const id = std::to_string(++next_id_);
 
    auto [ppromise, resolve, reject] = promise::Pure<RETURN>();
 
    auto done = std::make_shared<bool>(false);
 
-   auto promise = [this, id, &ppromise, done]() constexpr {
-      if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
-         return std::move(ppromise).Then([this, id, done = std::move(done)]() -> ::Promise<void> {
-            // Cleanup
+   const auto cleanup = [this, id, done]() constexpr {
+      assert(promises_);
+      assert(!*done);
+      *done     = true;
+      auto elem = promises_->handles_.find("call_" + id);
 
-            Dispatch([this, id, done = std::move(done)]() constexpr {
-               assert(promises_);
-               *done     = true;
-               auto elem = promises_->handles_.find("call_" + id);
+      if (elem != promises_->handles_.end()) {
+         // Detach the promise, as there is a slight chance that dispatch might be
+         // executed before the promise completes
+         std::move(elem->second).Detach();
 
-               if (elem != promises_->handles_.end()) {
-                  // Detach the promise, as there is a slight chance that dispatch might be
-                  // executed before the promise completes
-                  std::move(elem->second).Detach();
-
-                  promises_->handles_.erase(elem);
-               } else {
-                  assert(false);
-               }
-            });
-
-            co_return;
-         });
+         promises_->handles_.erase(elem);
       } else {
-         return std::move(ppromise).Then(
-           [this, id, done = std::move(done)](RETURN const& result) -> ::Promise<RETURN> {
-              // Cleanup
+         assert(false);
+      }
+   };
 
-              Dispatch([this, id, done = std::move(done)]() constexpr {
-                 assert(promises_);
-                 *done     = true;
-                 auto elem = promises_->handles_.find("call_" + id);
+   auto promise = [this, &ppromise, cleanup = std::move(cleanup)]() constexpr {
+      if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
+         return std::move(ppromise)
+           .Then([this, cleanup]() -> ::Promise<void> {
+              Dispatch(cleanup);
+              co_return;
+           })
+           .Catch(
+             [this,
+              cleanup = std::move(cleanup)](std::exception_ptr const& exc) -> ::Promise<void> {
+                Dispatch(cleanup);
+                std::rethrow_exception(exc);
 
-                 if (elem != promises_->handles_.end()) {
-                    // Detach the promise, as there is a slight chance that dispatch might be
-                    // executed before the promise completes
-                    std::move(elem->second).Detach();
-
-                    promises_->handles_.erase(elem);
-                 } else {
-                    assert(false);
-                 }
-              });
-
+                assert(false);
+                co_return;
+             }
+           );
+      } else {
+         return std::move(ppromise)
+           .Then([this, cleanup](RETURN const& result) -> ::Promise<RETURN> {
+              Dispatch(cleanup);
               co_return result;
-           }
-         );
+           })
+           .Catch(
+             [this,
+              cleanup = std::move(cleanup)](std::exception_ptr const& exc) -> Promise<RETURN> {
+                Dispatch(cleanup);
+                std::rethrow_exception(exc);
+
+                assert(false);
+                co_return *reinterpret_cast<RETURN*>(0);
+             }
+           );
       }
    }();
 
@@ -349,11 +360,6 @@ Webview::Call(std::string_view name, ARGS&&... args) {
          );
       }
    });
-
-   if (!promises_) {
-      // Webview terminated : MakeReject may not be called as Dispatch won't be ever depleted
-      throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
-   }
 
    return promise_ref;
 }
