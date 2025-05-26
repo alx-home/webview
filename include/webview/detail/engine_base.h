@@ -207,7 +207,7 @@ private:
          template <class PROMISE>
          Cleaner(
            std::string_view name,
-           PROMISE&&,
+           std::unique_ptr<PROMISE>,
            std::shared_ptr<promise::Reject> reject = nullptr
          );
 

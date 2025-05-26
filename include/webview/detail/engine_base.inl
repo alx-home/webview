@@ -45,12 +45,12 @@ namespace webview {
 template <class PROMISE>
 Webview::Promises::Cleaner::Cleaner(
   std::string_view                 name,
-  PROMISE&&                        promise,
+  std::unique_ptr<PROMISE>         promise,
   std::shared_ptr<promise::Reject> reject
 )
    : name_{name}
-   , promise_(std::make_unique<PROMISE>(std::move(promise)))
-   , reject_{reject} {}
+   , promise_(std::move(promise))
+   , reject_{std::move(reject)} {}
 
 template <class EXCEPTION, class... ARGS>
 void
@@ -136,6 +136,7 @@ Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
                 // Detach the promise, as there is a slight chance that dispatch might be
                 // executed before the promise completes
                 std::move(elem->second).Detach();
+
                 promises_->handles_.erase(elem);
              } else {
                 assert(false);
@@ -190,7 +191,8 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                   auto const& [_, emplaced] =
 #endif  // !NDEBUG
                     promises_->handles_.emplace(
-                      "bind_" + std::string{id}, Promises::Cleaner{name, std::move(wrapper)}
+                      "bind_" + std::string{id},
+                      Promises::Cleaner{name, std::make_unique<::Promise<void>>(std::move(wrapper))}
                     );
                   assert(emplaced);
 
@@ -245,27 +247,27 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 template <class RETURN, class... ARGS>
 auto&
 Webview::Call(std::string_view name, ARGS&&... args) {
-   if (!promises_) {
-      throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
-   }
-
    auto const id = std::to_string(++next_id_);
 
    auto [ppromise, resolve, reject] = promise::Pure<RETURN>();
 
-   auto promise = [this, id, &ppromise]() constexpr {
+   auto done = std::make_shared<bool>(false);
+
+   auto promise = [this, id, &ppromise, done]() constexpr {
       if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
-         return std::move(ppromise).Then([this, id]() -> ::Promise<void> {
+         return std::move(ppromise).Then([this, id, done = std::move(done)]() -> ::Promise<void> {
             // Cleanup
 
-            Dispatch([this, id]() constexpr {
+            Dispatch([this, id, done = std::move(done)]() constexpr {
                assert(promises_);
+               *done     = true;
                auto elem = promises_->handles_.find("call_" + id);
 
                if (elem != promises_->handles_.end()) {
                   // Detach the promise, as there is a slight chance that dispatch might be
                   // executed before the promise completes
                   std::move(elem->second).Detach();
+
                   promises_->handles_.erase(elem);
                } else {
                   assert(false);
@@ -275,30 +277,33 @@ Webview::Call(std::string_view name, ARGS&&... args) {
             co_return;
          });
       } else {
-         return std::move(ppromise).Then([this, id](RETURN const& result) -> ::Promise<RETURN> {
-            // Cleanup
+         return std::move(ppromise).Then(
+           [this, id, done = std::move(done)](RETURN const& result) -> ::Promise<RETURN> {
+              // Cleanup
 
-            Dispatch([this, id]() constexpr {
-               assert(promises_);
-               auto elem = promises_->handles_.find("call_" + id);
+              Dispatch([this, id, done = std::move(done)]() constexpr {
+                 assert(promises_);
+                 *done     = true;
+                 auto elem = promises_->handles_.find("call_" + id);
 
-               if (elem != promises_->handles_.end()) {
-                  // Detach the promise, as there is a slight chance that dispatch might be
-                  // executed before the promise completes
-                  std::move(elem->second).Detach();
-                  promises_->handles_.erase(elem);
-               } else {
-                  assert(false);
-               }
-            });
+                 if (elem != promises_->handles_.end()) {
+                    // Detach the promise, as there is a slight chance that dispatch might be
+                    // executed before the promise completes
+                    std::move(elem->second).Detach();
 
-            co_return result;
-         });
+                    promises_->handles_.erase(elem);
+                 } else {
+                    assert(false);
+                 }
+              });
+
+              co_return result;
+           }
+         );
       }
    }();
 
-   reverse_bindings_.emplace(
-     id,
+   auto const binding =
      std::make_shared<reverse_binding_t>([reject, resolve](bool error, std::string_view result) {
         if (error) {
            MakeReject<Exception>(*reject, error_t::WEBVIEW_ERROR_REJECT, result);
@@ -309,26 +314,48 @@ Webview::Call(std::string_view name, ARGS&&... args) {
               (*resolve)(js::Parse<RETURN>(result));
            }
         }
-     })
-   );
-
-   auto const& [result, _] =
-     promises_->handles_.emplace("call_" + id, Promises::Cleaner{name, std::move(promise), reject});
-   assert(_);
+     });
 
    std::tuple arguments{std::forward<ARGS>(args)...};
 
-   Eval(
-     R"(if (window.__webview__) {{
+   auto  promise_ptr = std::make_unique<std::remove_cvref_t<decltype(promise)>>(std::move(promise));
+   auto& promise_ref = *promise_ptr;
+
+   auto const promise_holder = std::make_shared<decltype(promise_ptr)>(std::move(promise_ptr));
+
+   Dispatch([this,
+             id,
+             arguments = std::move(arguments),
+             name      = std::string{name},
+             done,
+             binding,
+             reject,
+             promise_holder = std::move(promise_holder)]() constexpr {
+      if (!*done) {
+         reverse_bindings_.emplace(id, std::move(binding));
+
+         Promises::Cleaner cleaner{name, std::move(*promise_holder), reject};
+         auto const& [_, emplaced] = promises_->handles_.emplace("call_" + id, std::move(cleaner));
+         assert(emplaced);
+
+         Eval(
+           R"(if (window.__webview__) {{
         window.__webview__.reverseCall({}, "{}", "{}", {})
     }})",
-     js::Stringify(name),
-     id,
-     nonce_,
-     js::Stringify(arguments)
-   );
+           js::Stringify(name),
+           id,
+           nonce_,
+           js::Stringify(arguments)
+         );
+      }
+   });
 
-   return result->second.Promise<::Promise<RETURN>>();
+   if (!promises_) {
+      // Webview terminated : MakeReject may not be called as Dispatch won't be ever depleted
+      throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
+   }
+
+   return promise_ref;
 }
 
 template <class... ARGS>
