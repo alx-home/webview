@@ -351,7 +351,8 @@ Webview::Call(std::string_view name, ARGS&&... args) {
          reverse_bindings_.emplace(id, std::move(binding));
 
          Promises::Cleaner cleaner{name, std::move(*promise_holder), reject};
-         auto const& [_, emplaced] = promises_->handles_.emplace("call_" + id, std::move(cleaner));
+         [[maybe_unused]] auto const& [_, emplaced] =
+           promises_->handles_.emplace("call_" + id, std::move(cleaner));
          assert(emplaced);
 
          Eval(
