@@ -445,22 +445,33 @@ Webview::Promises::Cleaner::Detach() && {
    std::move(*promise).VDetach();
 }
 
-Webview::PromisesCleaner::PromisesCleaner(std::unique_ptr<Promises> promises)
-   : promises_(std::move(promises))
-   , prom_waiter_(MakePromise([this]() -> Promise<void> {
+void
+Webview::CleanPromises() {
+   // Ensure no one is in a middle of Call
+   std::unique_lock lock{mutex_};
+
+   assert(promises_);
+   auto promises = std::move(promises_);
+   assert(!promises_);
+
+   std::condition_variable_any cv{};
+   bool                        done{false};
+
+   lock.unlock();
+   auto promise = MakePromise([this, &cv, &done, &promises]() -> Promise<void> {
       struct Done {
-         std::condition_variable& cv_;
-         std::mutex&              mutex_;
-         bool&                    done_;
+         std::condition_variable_any& cv_;
+         std::shared_mutex&           mutex_;
+         bool&                        done_;
 
          ~Done() {
             std::unique_lock lock{mutex_};
             done_ = true;
             cv_.notify_all();
          }
-      } _{.cv_ = cv_, .mutex_ = mutex_, .done_ = done_};
+      } _{.cv_ = cv, .mutex_ = mutex_, .done_ = done};
 
-      for (auto& handle : promises_->handles_) {
+      for (auto& handle : promises->handles_) {
          try {
             handle.second.Reject<Exception>(
               error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating"
@@ -472,27 +483,20 @@ Webview::PromisesCleaner::PromisesCleaner(std::unique_ptr<Promises> promises)
       }
 
       co_return;
-   })) {}
+   });
 
-Webview::PromisesCleaner::~PromisesCleaner() {
-   std::unique_lock lock{mutex_};
-   if (!done_) {
-      cv_.wait(lock);
+   lock.lock();
+   if (!done) {
+      cv.wait(lock);
    }
 
-   assert(prom_waiter_.Done());
-   assert(!prom_waiter_.Exception());
+   assert(promise.Done());
+   assert(!promise.Exception());
 }
 
-Webview::PromisesCleaner
-Webview::CleanPromises() {
-   std::unique_lock lock{mutex_};
-
-   assert(promises_);
-   auto promises = std::move(promises_);
-
-   lock.unlock();
-   return PromisesCleaner{std::move(promises)};
+bool
+Webview::PendingPromises() const {
+   return pending_;
 }
 
 }  // namespace webview

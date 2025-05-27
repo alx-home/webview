@@ -159,7 +159,7 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                                          )](std::string_view id, std::string_view js_args) {
                using args_t = promise::args_t<decltype(promise)>;
 
-               if (!promises_) {
+               if (stop_) {
                   return Dispatch([id = js::Stringify(id), this]() {
                      Eval(
                        R"(window.__webview__.onReply({}, true, {}, "{}"))",
@@ -169,6 +169,8 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                      );
                   });
                }
+
+               assert(promises_);
 
                try {
                   auto args = [&]() constexpr {
@@ -250,10 +252,12 @@ auto&
 Webview::Call(std::string_view name, ARGS&&... args) {
    std::shared_lock lock{mutex_};
 
-   if (!promises_) {
+   if (stop_) {
       // Webview terminated : MakeReject may not be called as Dispatch won't be ever depleted
       throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
    }
+   ++pending_;
+   assert(promises_);
 
    auto const id = std::to_string(++next_id_);
 
@@ -336,6 +340,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
 
    Dispatch([this,
              id,
+             // @todo not webview thread
              arguments = std::move(arguments),
              name      = std::string{name},
              done,
@@ -359,6 +364,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
            js::Stringify(arguments)
          );
       }
+      --pending_;
    });
 
    return promise_ref;

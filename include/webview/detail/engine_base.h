@@ -31,6 +31,7 @@
 #include "user_script.h"
 
 #include <chrono>
+#include <condition_variable>
 #include <coroutine>
 #include <format>
 #include <list>
@@ -159,26 +160,12 @@ protected:
 
 private:
    struct Promises;
-   class PromisesCleaner {
-   private:
-      PromisesCleaner(std::unique_ptr<Promises> promises);
-
-   public:
-      ~PromisesCleaner();
-
-   private:
-      std::unique_ptr<Promises> promises_;
-      std::condition_variable   cv_{};
-      std::mutex                mutex_{};
-      bool                      done_ = false;
-
-      Promise<> prom_waiter_;
-
-      friend class Webview;
-   };
 
 protected:
-   PromisesCleaner CleanPromises();
+   void CleanPromises();
+   bool PendingPromises() const;
+
+   bool stop_{false};
 
 private:
    static std::atomic_uint& WindowRefCount();
@@ -233,8 +220,8 @@ private:
       std::unordered_map<Id, Cleaner> handles_{};
    };
 
-   std::shared_mutex mutex_{};
-   // Must stays at the end !
+   std::shared_mutex         mutex_{};
+   std::atomic<std::size_t>  pending_{};
    std::unique_ptr<Promises> promises_{std::make_unique<Promises>()};
 };
 

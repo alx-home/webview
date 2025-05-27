@@ -539,20 +539,21 @@ Win32EdgeEngine::~Win32EdgeEngine() {
    });
 
    {
-      auto cleaner = CleanPromises();
+      stop_ = true;
+
       assert(message_window_);
+      assert(owns_window_);
 
-      if (message_window_) {
+      do {
+         DepleteRunLoopEventQueue();
+      } while (PendingPromises());
 
-         if (owns_window_) {
-            // Not strictly needed for windows to close immediately but aligns
-            // behavior across backends.
-            DepleteRunLoopEventQueue();
-         }
-         // We need the message window in order to deplete the event queue.
-         SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
-         DestroyWindow(message_window_);
-      }
+      CleanPromises();
+      assert(!PendingPromises());
+
+      // We need the message window in order to deplete the event queue.
+      SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
+      DestroyWindow(message_window_);
    }
 
    if (com_handler_) {
