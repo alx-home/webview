@@ -27,6 +27,7 @@
 
 #include "../errors.h"
 #include "utils/Nonce.h"
+#include "utils/Scoped.h"
 #include "engine_base.h"
 
 #include <json/json.inl>
@@ -256,116 +257,63 @@ Webview::Call(std::string_view name, ARGS&&... args) {
       // Webview terminated : MakeReject may not be called as Dispatch won't be ever depleted
       throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
    }
-   ++pending_;
    assert(promises_);
+
+   auto [promise, resolve, reject] = promise::Pure<RETURN>();
 
    auto const id = std::to_string(++next_id_);
 
-   auto [ppromise, resolve, reject] = promise::Pure<RETURN>();
-
-   auto done = std::make_shared<bool>(false);
-
-   const auto cleanup = [this, id, done]() constexpr {
-      assert(promises_);
-      assert(!*done);
-      *done     = true;
-      auto elem = promises_->handles_.find("call_" + id);
-
-      if (elem != promises_->handles_.end()) {
-         // Detach the promise, as there is a slight chance that dispatch might be
-         // executed before the promise completes
-         std::move(elem->second).Detach();
-
-         promises_->handles_.erase(elem);
-      } else {
-         assert(false);
-      }
-   };
-
-   auto promise = [this, &ppromise, cleanup = std::move(cleanup)]() constexpr {
-      if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
-         return std::move(ppromise)
-           .Then([this, cleanup]() -> ::Promise<void> {
-              Dispatch(cleanup);
-              co_return;
-           })
-           .Catch(
-             [this,
-              cleanup = std::move(cleanup)](std::exception_ptr const& exc) -> ::Promise<void> {
-                Dispatch(cleanup);
-                std::rethrow_exception(exc);
-
-                assert(false);
-                co_return;
-             }
-           );
-      } else {
-         return std::move(ppromise)
-           .Then([this, cleanup](RETURN const& result) -> ::Promise<RETURN> {
-              Dispatch(cleanup);
-              co_return result;
-           })
-           .Catch(
-             [this,
-              cleanup = std::move(cleanup)](std::exception_ptr const& exc) -> Promise<RETURN> {
-                Dispatch(cleanup);
-                std::rethrow_exception(exc);
-
-                assert(false);
-                co_return *reinterpret_cast<RETURN*>(0);
-             }
-           );
-      }
-   }();
-
-   auto const binding =
-     std::make_shared<reverse_binding_t>([reject, resolve](bool error, std::string_view result) {
-        if (error) {
-           MakeReject<Exception>(*reject, error_t::WEBVIEW_ERROR_REJECT, result);
-        } else {
-           if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
-              (*resolve)();
-           } else {
-              (*resolve)(js::Parse<RETURN>(result));
-           }
-        }
-     });
-
-   std::tuple arguments{std::forward<ARGS>(args)...};
-
    auto  promise_ptr = std::make_unique<std::remove_cvref_t<decltype(promise)>>(std::move(promise));
    auto& promise_ref = *promise_ptr;
-
-   auto const promise_holder = std::make_shared<decltype(promise_ptr)>(std::move(promise_ptr));
-
    Dispatch([this,
              id,
-             // @todo not webview thread
-             arguments = std::move(arguments),
+             arguments = std::move(std::tuple{std::forward<ARGS>(args)...}),
              name      = std::string{name},
-             done,
-             binding,
              reject,
-             promise_holder = std::move(promise_holder)]() constexpr {
-      if (!*done) {
-         reverse_bindings_.emplace(id, std::move(binding));
+             resolve,
+             promise_holder =
+               std::make_shared<decltype(promise_ptr)>(std::move(promise_ptr))]() constexpr {
+      auto const binding = std::make_shared<reverse_binding_t>(
+        [this, reject, resolve, id](bool error, std::string_view result) {
+           ScopeExit _{[&]() constexpr {
+              assert(promises_);
+              auto elem = promises_->handles_.find("call_" + id);
 
-         Promises::Cleaner cleaner{name, std::move(*promise_holder), reject};
-         [[maybe_unused]] auto const& [_, emplaced] =
-           promises_->handles_.emplace("call_" + id, std::move(cleaner));
-         assert(emplaced);
+              if (elem != promises_->handles_.end()) {
+                 promises_->handles_.erase(elem);
+              } else {
+                 assert(false);
+              }
+           }};
 
-         Eval(
-           R"(if (window.__webview__) {{
+           if (error) {
+              MakeReject<Exception>(*reject, error_t::WEBVIEW_ERROR_REJECT, result);
+           } else {
+              if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
+                 (*resolve)();
+              } else {
+                 (*resolve)(js::Parse<RETURN>(result));
+              }
+           }
+        }
+      );
+
+      reverse_bindings_.emplace(id, std::move(binding));
+
+      Promises::Cleaner cleaner{name, std::move(*promise_holder), reject};
+      [[maybe_unused]] auto const& [_, emplaced] =
+        promises_->handles_.emplace("call_" + id, std::move(cleaner));
+      assert(emplaced);
+
+      Eval(
+        R"(if (window.__webview__) {{
         window.__webview__.reverseCall({}, "{}", "{}", {})
     }})",
-           js::Stringify(name),
-           id,
-           nonce_,
-           js::Stringify(arguments)
-         );
-      }
-      --pending_;
+        js::Stringify(name),
+        id,
+        nonce_,
+        js::Stringify(arguments)
+      );
    });
 
    return promise_ref;

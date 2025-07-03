@@ -494,9 +494,4 @@ Webview::CleanPromises() {
    assert(!promise.Exception());
 }
 
-bool
-Webview::PendingPromises() const {
-   return pending_;
-}
-
 }  // namespace webview

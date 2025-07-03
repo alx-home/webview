@@ -163,7 +163,6 @@ private:
 
 protected:
    void CleanPromises();
-   bool PendingPromises() const;
 
    bool stop_{false};
 
@@ -221,7 +220,6 @@ private:
    };
 
    std::shared_mutex         mutex_{};
-   std::atomic<std::size_t>  pending_{};
    std::unique_ptr<Promises> promises_{std::make_unique<Promises>()};
 };
 

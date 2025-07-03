@@ -544,12 +544,8 @@ Win32EdgeEngine::~Win32EdgeEngine() {
       assert(message_window_);
       assert(owns_window_);
 
-      do {
-         DepleteRunLoopEventQueue();
-      } while (PendingPromises());
-
+      DepleteRunLoopEventQueue();
       CleanPromises();
-      assert(!PendingPromises());
 
       // We need the message window in order to deplete the event queue.
       SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
