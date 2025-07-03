@@ -26,6 +26,7 @@
 #include "detail/engine_base.h"
 #include "detail/user_script.h"
 #include "promise/promise.h"
+#include "utils/Scoped.h"
 
 #include "errors.h"
 
@@ -33,6 +34,7 @@
 #include <exception>
 #include <format>
 #include <mutex>
+#include <shared_mutex>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -420,19 +422,27 @@ Webview::Promises::Cleaner::await_ready() {
    if (detached_) {
       return true;
    } else {
-      return promise_->VAwait().await_ready();
+      assert(!awaitable_);
+      awaitable_ = &promise_->VAwait();
+      return awaitable_->await_ready();
    }
 }
 void
 Webview::Promises::Cleaner::await_suspend(std::coroutine_handle<> h) {
    if (!detached_) {
-      promise_->VAwait().await_suspend(h);
+      assert(awaitable_);
+      awaitable_->await_suspend(h);
    }
 }
 void
 Webview::Promises::Cleaner::await_resume() {
+   ScopeExit _{[&]() constexpr { awaitable_ = nullptr; }};
+
    if (!detached_) {
-      promise_->VAwait().await_resume();
+      assert(awaitable_);
+      awaitable_->await_resume();
+   } else if (awaitable_) {
+      delete awaitable_;
    }
 }
 
@@ -445,11 +455,13 @@ Webview::Promises::Cleaner::Detach() && {
    std::move(*promise).VDetach();
 }
 
-void
-Webview::CleanPromises() {
-   // Ensure no one is in a middle of Call
-   std::unique_lock lock{mutex_};
+Webview::SLock
+Webview::Lock() {
+   return SLock{mutex_};
+}
 
+void
+Webview::CleanPromises(Webview::SLock&& lock) {
    assert(promises_);
    auto promises = std::move(promises_);
    assert(!promises_);

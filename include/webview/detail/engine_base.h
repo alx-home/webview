@@ -162,7 +162,9 @@ private:
    struct Promises;
 
 protected:
-   void CleanPromises();
+   using SLock = std::unique_lock<std::shared_mutex>;
+   SLock Lock();
+   void  CleanPromises(SLock&& lock);
 
    bool stop_{false};
 
@@ -214,6 +216,8 @@ private:
          std::unique_ptr<promise::VPromise> promise_{};
          std::shared_ptr<promise::Reject>   reject_{nullptr};
          bool                               detached_{false};
+
+         promise::VPromise::Awaitable* awaitable_{nullptr};
       };
 
       std::unordered_map<Id, Cleaner> handles_{};

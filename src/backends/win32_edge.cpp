@@ -539,18 +539,19 @@ Win32EdgeEngine::~Win32EdgeEngine() {
    });
 
    {
-      stop_ = true;
+      auto lock = Lock();
+      stop_     = true;
 
       assert(message_window_);
       assert(owns_window_);
 
       DepleteRunLoopEventQueue();
-      CleanPromises();
-
-      // We need the message window in order to deplete the event queue.
-      SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
-      DestroyWindow(message_window_);
+      CleanPromises(std::move(lock));
    }
+
+   // We need the message window in order to deplete the event queue.
+   SetWindowLongPtrW(message_window_, GWLP_WNDPROC, wndproc);
+   DestroyWindow(message_window_);
 
    if (com_handler_) {
       com_handler_->Release();

@@ -280,6 +280,10 @@ Webview::Call(std::string_view name, ARGS&&... args) {
               auto elem = promises_->handles_.find("call_" + id);
 
               if (elem != promises_->handles_.end()) {
+                 // Detach the promise, as there is a slight chance that dispatch might be
+                 // executed before the promise completes
+                 std::move(elem->second).Detach();
+
                  promises_->handles_.erase(elem);
               } else {
                  assert(false);
