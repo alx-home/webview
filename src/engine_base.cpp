@@ -33,96 +33,88 @@
 #include <condition_variable>
 #include <exception>
 #include <format>
+#include <json/json.h>
 #include <mutex>
 #include <shared_mutex>
 #include <tuple>
 #include <utility>
 #include <variant>
-#include <json/json.h>
+
 
 namespace webview {
 
-bool
-Bounds::Contains(Pos const& pos) const {
-   return (pos.x_ >= x_) && (pos.x_ <= x_ + width_) && (pos.y_ >= y_) && (pos.y_ <= y_ + height_);
+bool Bounds::Contains(Pos const &pos) const {
+  return (pos.x_ >= x_) && (pos.x_ <= x_ + width_) && (pos.y_ >= y_) &&
+         (pos.y_ <= y_ + height_);
 }
 
 Webview::Webview(std::function<void()> on_terminate)
-   : on_terminate_(std::move(on_terminate)) {}
+    : on_terminate_(std::move(on_terminate)) {}
 
-void
-Webview::Navigate(std::string_view url) {
-   if (url.empty()) {
-      return NavigateImpl("about:blank");
-   }
+void Webview::Navigate(std::string_view url) {
+  if (url.empty()) {
+    return NavigateImpl("about:blank");
+  }
 
-   return NavigateImpl(url);
+  return NavigateImpl(url);
 }
 
-void
-Webview::Unbind(std::string_view name) {
-   if (bindings_.erase(std::string{name}) != 1) {
-      throw Exception(ErrorInfo{
-        error_t::WEBVIEW_ERROR_NOT_FOUND,
-        std::string{"trying to unbind undefined binding "} + std::string{name}
-      });
-   }
+void Webview::Unbind(std::string_view name) {
+  if (bindings_.erase(std::string{name}) != 1) {
+    throw Exception(
+        ErrorInfo{error_t::WEBVIEW_ERROR_NOT_FOUND,
+                  std::string{"trying to unbind undefined binding "} +
+                      std::string{name}});
+  }
 
-   ReplaceBindScript();
+  ReplaceBindScript();
 
-   // Notify that a binding was created if the init script has already
-   // set things up.
-   Eval(
-     R"(if (window.__webview__) {{
+  // Notify that a binding was created if the init script has already
+  // set things up.
+  Eval(
+      R"(if (window.__webview__) {{
     window.__webview__.onUnbind({}, "{}")
 }})",
-     js::Stringify(name),
-     nonce_
-   );
+      js::Stringify(name), nonce_);
 }
 
-void
-Webview::Init(std::string_view js) {
-   AddUserScript(js);
+void Webview::Init(std::string_view js) { AddUserScript(js); }
+
+user_script *Webview::AddUserScript(std::string_view js) {
+  return std::addressof(
+      *user_scripts_.emplace(user_scripts_.end(), AddUserScriptImpl(js)));
 }
 
-user_script*
-Webview::AddUserScript(std::string_view js) {
-   return std::addressof(*user_scripts_.emplace(user_scripts_.end(), AddUserScriptImpl(js)));
+user_script *Webview::ReplaceUserScript(const user_script &old_script,
+                                        std::string_view new_script_code) {
+  RemoveAllUserScript(user_scripts_);
+  user_script *old_script_ptr{};
+  for (auto &script : user_scripts_) {
+    auto is_old_script = AreUserScriptsEqual(script, old_script);
+    script =
+        AddUserScriptImpl(is_old_script ? new_script_code : script.GetCode());
+    if (is_old_script) {
+      old_script_ptr = std::addressof(script);
+    }
+  }
+  return old_script_ptr;
 }
 
-user_script*
-Webview::ReplaceUserScript(const user_script& old_script, std::string_view new_script_code) {
-   RemoveAllUserScript(user_scripts_);
-   user_script* old_script_ptr{};
-   for (auto& script : user_scripts_) {
-      auto is_old_script = AreUserScriptsEqual(script, old_script);
-      script             = AddUserScriptImpl(is_old_script ? new_script_code : script.GetCode());
-      if (is_old_script) {
-         old_script_ptr = std::addressof(script);
-      }
-   }
-   return old_script_ptr;
+void Webview::ReplaceBindScript() {
+  if (bind_script_) {
+    bind_script_ = ReplaceUserScript(*bind_script_, CreateBindScript());
+  } else {
+    bind_script_ = AddUserScript(CreateBindScript());
+  }
 }
 
-void
-Webview::ReplaceBindScript() {
-   if (bind_script_) {
-      bind_script_ = ReplaceUserScript(*bind_script_, CreateBindScript());
-   } else {
-      bind_script_ = AddUserScript(CreateBindScript());
-   }
+void Webview::AddInitScript(std::string_view post_fn) {
+  AddUserScript(CreateInitScript(post_fn));
 }
 
-void
-Webview::AddInitScript(std::string_view post_fn) {
-   AddUserScript(CreateInitScript(post_fn));
-}
-
-std::string
-Webview::CreateInitScript(std::string_view post_fn) {
-   return std::format(
-     R"(
+std::string Webview::CreateInitScript(std::string_view post_fn) {
+  return std::format(
+      R"(
 (function() {{
    'use strict';
 
@@ -261,27 +253,24 @@ Webview::CreateInitScript(std::string_view post_fn) {
   
    window.__webview__ = new Webview();
 }})())",
-     post_fn,
-     nonce_
-   );
+      post_fn, nonce_);
 }
 
-std::string
-Webview::CreateBindScript() {
-   std::string js_names = "[";
-   bool        first    = true;
-   for (const auto& binding : bindings_) {
-      if (first) {
-         first = false;
-      } else {
-         js_names += ",";
-      }
-      js_names += js::Stringify(binding.first);
-   }
-   js_names += "]";
+std::string Webview::CreateBindScript() {
+  std::string js_names = "[";
+  bool first = true;
+  for (const auto &binding : bindings_) {
+    if (first) {
+      first = false;
+    } else {
+      js_names += ",";
+    }
+    js_names += js::Stringify(binding.first);
+  }
+  js_names += "]";
 
-   return std::format(
-     R"((function() {{
+  return std::format(
+      R"((function() {{
     'use strict';
     var methods = {};
 
@@ -289,221 +278,197 @@ Webview::CreateBindScript() {
         window.__webview__.onBind(name, "{}");
     }});
 }})())",
-     js_names,
-     nonce_
-   );
+      js_names, nonce_);
 }
 
 struct Header {
-   std::string nonce_;
-   bool        reverse_;
-   std::string id_;
-   std::string name_;
+  std::string nonce_;
+  bool reverse_;
+  std::string id_;
+  std::string name_;
 
-   static constexpr js::Proto PROTOTYPE{
-     js::_{"nonce", &Header::nonce_},
-     js::_{"reverse", &Header::reverse_},
-     js::_{"id", &Header::id_},
-     js::_{"method", &Header::name_},
-   };
+  static constexpr js::Proto PROTOTYPE{
+      js::_{"nonce", &Header::nonce_},
+      js::_{"reverse", &Header::reverse_},
+      js::_{"id", &Header::id_},
+      js::_{"method", &Header::name_},
+  };
 };
 
 struct ReplyMessage : Header {
-   std::string params_;
+  std::string params_;
 
-   static constexpr js::Proto PROTOTYPE{
-     js::Extend{
-       Header::PROTOTYPE,
-       js::_{"params", &ReplyMessage::params_},
-     },
-   };
+  static constexpr js::Proto PROTOTYPE{
+      js::Extend{
+          Header::PROTOTYPE,
+          js::_{"params", &ReplyMessage::params_},
+      },
+  };
 };
 
 struct ReverseMessage : Header {
-   bool                       error_;
-   std::optional<std::string> result_;
+  bool error_;
+  std::optional<std::string> result_;
 
-   static constexpr js::Proto PROTOTYPE{
-     js::Extend{
-       Header::PROTOTYPE,
-       js::_{"error", &ReverseMessage::error_},
-       js::_{"result", &ReverseMessage::result_},
-     },
-   };
+  static constexpr js::Proto PROTOTYPE{
+      js::Extend{
+          Header::PROTOTYPE,
+          js::_{"error", &ReverseMessage::error_},
+          js::_{"result", &ReverseMessage::result_},
+      },
+  };
 };
 
 using Message = std::variant<ReverseMessage, ReplyMessage>;
 
-void
-Webview::OnMessage(std::string_view msg_) {
-   auto const check_header = [this](auto msg) constexpr {
-      if (msg.nonce_ != nonce_) {
-         std::cerr << "Invalid nonce !" << std::endl;
-         // ignoring
-         return false;
+void Webview::OnMessage(std::string_view msg_) {
+  auto const check_header = [this](auto msg) constexpr {
+    if (msg.nonce_ != nonce_) {
+      std::cerr << "Invalid nonce !" << std::endl;
+      // ignoring
+      return false;
+    }
+    return true;
+  };
+
+  auto vmsg = js::Parse<Message>(msg_);
+
+  if (std::holds_alternative<ReplyMessage>(vmsg)) {
+    auto const &msg = std::get<ReplyMessage>(vmsg);
+    if (check_header(msg)) {
+      assert(!msg.reverse_);
+
+      auto const &create_promise = bindings_.at(std::string{msg.name_});
+
+      Dispatch([create_promise, id = std::string{msg.id_},
+                params = std::string{msg.params_}]() {
+        (*create_promise)(id, params);
+      });
+    }
+  } else {
+    auto const &msg = std::get<ReverseMessage>(vmsg);
+    if (check_header(msg)) {
+      assert(msg.reverse_);
+
+      if (auto elem = reverse_bindings_.find(std::string{msg.id_});
+          elem != reverse_bindings_.end()) {
+        auto make_reply = std::move(elem->second);
+        reverse_bindings_.erase(elem);
+
+        Dispatch([make_reply, error = msg.error_,
+                  result = std::string{msg.result_ ? *msg.result_ : ""}]() {
+          (*make_reply)(error, result);
+        });
       }
-      return true;
-   };
+    }
+  }
+}
 
-   auto vmsg = js::Parse<Message>(msg_);
+void Webview::OnWindowCreated() { IncWindowCount(); }
 
-   if (std::holds_alternative<ReplyMessage>(vmsg)) {
-      auto const& msg = std::get<ReplyMessage>(vmsg);
-      if (check_header(msg)) {
-         assert(!msg.reverse_);
+void Webview::OnWindowDestroyed(bool skip_termination) {
+  if ((DecWindowCount() <= 0) && !skip_termination) {
+    Terminate();
+  }
 
-         auto const& create_promise = bindings_.at(std::string{msg.name_});
+  on_terminate_();
+}
 
-         Dispatch([create_promise, id = std::string{msg.id_}, params = std::string{msg.params_}]() {
-            (*create_promise)(id, params);
-         });
+std::string_view Webview::GetNonce() const { return nonce_; }
+
+std::atomic_uint &Webview::WindowRefCount() {
+  static std::atomic_uint s__ref_count{0};
+  return s__ref_count;
+}
+
+unsigned int Webview::IncWindowCount() { return ++WindowRefCount(); }
+
+unsigned int Webview::DecWindowCount() {
+  auto &count = WindowRefCount();
+  if (count > 0) {
+    return --count;
+  }
+  return 0;
+}
+
+bool Webview::Promises::Cleaner::await_ready() {
+  if (detached_) {
+    return true;
+  } else {
+    assert(!awaitable_);
+    awaitable_ = &promise_->VAwait();
+    return awaitable_->await_ready();
+  }
+}
+void Webview::Promises::Cleaner::await_suspend(std::coroutine_handle<> h) {
+  if (!detached_) {
+    assert(awaitable_);
+    awaitable_->await_suspend(h);
+  }
+}
+void Webview::Promises::Cleaner::await_resume() {
+  ScopeExit _{[&]() constexpr { awaitable_ = nullptr; }};
+
+  if (!detached_) {
+    assert(awaitable_);
+    awaitable_->await_resume();
+  } else if (awaitable_) {
+    delete awaitable_;
+  }
+}
+
+void Webview::Promises::Cleaner::Detach() && {
+  assert(!detached_);
+  detached_ = true;
+  reject_ = nullptr;
+  auto promise = std::move(promise_);
+  std::move(*promise).VDetach();
+}
+
+Webview::SLock Webview::Lock() { return SLock{mutex_}; }
+
+void Webview::CleanPromises(Webview::SLock &&lock) {
+  assert(promises_);
+  auto promises = std::move(promises_);
+  assert(!promises_);
+
+  std::condition_variable_any cv{};
+  bool done{false};
+
+  lock.unlock();
+  auto promise = MakePromise([this, &cv, &done, &promises]() -> Promise<void> {
+    struct Done {
+      std::condition_variable_any &cv_;
+      std::shared_mutex &mutex_;
+      bool &done_;
+
+      ~Done() {
+        std::unique_lock lock{mutex_};
+        done_ = true;
+        cv_.notify_all();
       }
-   } else {
-      auto const& msg = std::get<ReverseMessage>(vmsg);
-      if (check_header(msg)) {
-         assert(msg.reverse_);
+    } _{.cv_ = cv, .mutex_ = mutex_, .done_ = done};
 
-         if (auto elem = reverse_bindings_.find(std::string{msg.id_});
-             elem != reverse_bindings_.end()) {
-            auto make_reply = std::move(elem->second);
-            reverse_bindings_.erase(elem);
-
-            Dispatch([make_reply,
-                      error  = msg.error_,
-                      result = std::string{msg.result_ ? *msg.result_ : ""}]() {
-               (*make_reply)(error, result);
-            });
-         }
+    for (auto &handle : promises->handles_) {
+      try {
+        handle.second.Reject<Exception>(error_t::WEBVIEW_ERROR_CANCELED,
+                                        "Webview is terminating");
+        co_await handle.second;
+      } catch (std::exception const &e) {
+        std::cerr << e.what() << std::endl;
       }
-   }
+    }
+
+    co_return;
+  });
+
+  lock.lock();
+  if (!done) {
+    cv.wait(lock);
+  }
+
+  assert(promise.Done());
+  assert(!promise.Exception());
 }
 
-void
-Webview::OnWindowCreated() {
-   IncWindowCount();
-}
-
-void
-Webview::OnWindowDestroyed(bool skip_termination) {
-   if ((DecWindowCount() <= 0) && !skip_termination) {
-      Terminate();
-   }
-
-   on_terminate_();
-}
-
-std::string_view
-Webview::GetNonce() const {
-   return nonce_;
-}
-
-std::atomic_uint&
-Webview::WindowRefCount() {
-   static std::atomic_uint s__ref_count{0};
-   return s__ref_count;
-}
-
-unsigned int
-Webview::IncWindowCount() {
-   return ++WindowRefCount();
-}
-
-unsigned int
-Webview::DecWindowCount() {
-   auto& count = WindowRefCount();
-   if (count > 0) {
-      return --count;
-   }
-   return 0;
-}
-
-bool
-Webview::Promises::Cleaner::await_ready() {
-   if (detached_) {
-      return true;
-   } else {
-      assert(!awaitable_);
-      awaitable_ = &promise_->VAwait();
-      return awaitable_->await_ready();
-   }
-}
-void
-Webview::Promises::Cleaner::await_suspend(std::coroutine_handle<> h) {
-   if (!detached_) {
-      assert(awaitable_);
-      awaitable_->await_suspend(h);
-   }
-}
-void
-Webview::Promises::Cleaner::await_resume() {
-   ScopeExit _{[&]() constexpr { awaitable_ = nullptr; }};
-
-   if (!detached_) {
-      assert(awaitable_);
-      awaitable_->await_resume();
-   } else if (awaitable_) {
-      delete awaitable_;
-   }
-}
-
-void
-Webview::Promises::Cleaner::Detach() && {
-   assert(!detached_);
-   detached_    = true;
-   reject_      = nullptr;
-   auto promise = std::move(promise_);
-   std::move(*promise).VDetach();
-}
-
-Webview::SLock
-Webview::Lock() {
-   return SLock{mutex_};
-}
-
-void
-Webview::CleanPromises(Webview::SLock&& lock) {
-   assert(promises_);
-   auto promises = std::move(promises_);
-   assert(!promises_);
-
-   std::condition_variable_any cv{};
-   bool                        done{false};
-
-   lock.unlock();
-   auto promise = MakePromise([this, &cv, &done, &promises]() -> Promise<void> {
-      struct Done {
-         std::condition_variable_any& cv_;
-         std::shared_mutex&           mutex_;
-         bool&                        done_;
-
-         ~Done() {
-            std::unique_lock lock{mutex_};
-            done_ = true;
-            cv_.notify_all();
-         }
-      } _{.cv_ = cv, .mutex_ = mutex_, .done_ = done};
-
-      for (auto& handle : promises->handles_) {
-         try {
-            handle.second.Reject<Exception>(
-              error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating"
-            );
-            co_await handle.second;
-         } catch (std::exception const& e) {
-            std::cerr << e.what() << std::endl;
-         }
-      }
-
-      co_return;
-   });
-
-   lock.lock();
-   if (!done) {
-      cv.wait(lock);
-   }
-
-   assert(promise.Done());
-   assert(!promise.Exception());
-}
-
-}  // namespace webview
+} // namespace webview
