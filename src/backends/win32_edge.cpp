@@ -29,6 +29,7 @@
 #include "detail/platform/windows/theme.h"
 
 #include <format>
+#include <optional>
 #include <regex>
 #include <utility>
 #include <dwmapi.h>
@@ -37,7 +38,7 @@
 #include <utils/String.h>
 #include <winerror.h>
 #include <wingdi.h>
-#include <winuser.h>
+#include <WinUser.h>
 
 #if defined(WEBVIEW_PLATFORM_WINDOWS) && defined(WEBVIEW_EDGE)
 
@@ -282,16 +283,16 @@ Win32EdgeEngine::SetSchemesOption(
 }
 
 Win32EdgeEngine::Win32EdgeEngine(
-  bool                  debug,
-  HWND                  window,
-  WebviewOptions        options,
-  std::string_view      user_data_dir,
-  DWORD                 style,
-  DWORD                 exStyle,
-  std::function<void()> on_terminate
+  bool                            debug,
+  HWND                            window,
+  WebviewOptions                  options,
+  std::optional<std::string_view> user_data_dir,
+  DWORD                           style,
+  DWORD                           exStyle,
+  std::function<void()>           on_terminate
 )
    : Webview(std::move(on_terminate))
-   , wuser_data_dir_{utils::WidenString(user_data_dir)}
+   , wuser_data_dir_{user_data_dir.has_value() ? std::optional{utils::WidenString(*user_data_dir)} : std::nullopt}
    , options_{std::move(options)}
    , owns_window_{!window} {
    if (!Webview2Available()) {
@@ -792,6 +793,31 @@ Win32EdgeEngine::OpenDevTools() {
    webview_->OpenDevToolsWindow();
 }
 
+Microsoft::WRL::ComPtr<ICoreWebView2CookieManager>
+Win32EdgeEngine::GetCookieManager() const {
+   Microsoft::WRL::ComPtr<ICoreWebView2_2> wv2;
+
+#   pragma clang diagnostic push
+#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
+   auto result = webview_->QueryInterface(IID_PPV_ARGS(&wv2));
+#   pragma clang diagnostic pop
+   if (result != S_OK) {
+      throw Exception{
+        error_t::WEBVIEW_ERROR_UNSPECIFIED,
+        std::format("QueryInterface ICoreWebView2_2 Failed ({})", std::to_string(result))
+      };
+   }
+   Microsoft::WRL::ComPtr<ICoreWebView2CookieManager> cookie_manager;
+   HRESULT                                            hr = wv2->get_CookieManager(&cookie_manager);
+   if (hr != S_OK) {
+      throw Exception{
+        error_t::WEBVIEW_ERROR_UNSPECIFIED,
+        std::format("Could not get CookieManager: {}", std::to_string(hr))
+      };
+   }
+   return cookie_manager;
+}
+
 void
 Win32EdgeEngine::RegisterUrlHandlers(
   std::vector<std::string_view> const& filters,
@@ -1105,7 +1131,7 @@ Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
    com_handler_->SetAttemptHandler([&] {
       return webview2_loader_.create_environment_with_options(
         nullptr,
-        wuser_data_dir_.size() ? wuser_data_dir_.c_str() : nullptr,
+        wuser_data_dir_.has_value() ? wuser_data_dir_->c_str() : nullptr,
         options_.Get(),
         com_handler_
       );

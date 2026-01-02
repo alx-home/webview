@@ -175,6 +175,7 @@ private:
 class Win32EdgeEngine final : public Webview {
 public:
    static auto MakeOptions() { return Microsoft::WRL::Make<CoreWebView2EnvironmentOptions>(); }
+   Microsoft::WRL::ComPtr<ICoreWebView2CookieManager> GetCookieManager() const;
 
    static void SetSchemesOption(
      std::vector<std::string> const&                         schemes,
@@ -183,13 +184,16 @@ public:
 
    using WebviewOptions = Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions>;
    Win32EdgeEngine(
-     bool                  debug,
-     HWND                  window,
-     WebviewOptions        options       = nullptr,
-     std::string_view      user_data_dir = "",
-     DWORD                 style         = WS_OVERLAPPEDWINDOW,
-     DWORD                 exStyle       = 0,
-     std::function<void()> on_terminate  = []() constexpr {}
+     bool                            debug,
+     HWND                            window,
+     WebviewOptions                  options       = nullptr,
+     std::optional<std::string_view> user_data_dir = std::nullopt,
+     DWORD                           style         = WS_OVERLAPPEDWINDOW,
+     DWORD                           exStyle       = 0,
+     std::function<void()>           on_terminate =
+       []() constexpr {
+          /* No-op: default termination handler. Add custom cleanup if needed. */
+       }
    );
 
    ~Win32EdgeEngine() final;
@@ -284,17 +288,17 @@ private:
    // CreateCoreWebView2EnvironmentWithOptions.
    // Source:
    // https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/webview2-idl#createcorewebview2environmentwithoptions
-   com_init_wrapper         com_init_;
-   HWND                     window_         = nullptr;
-   HWND                     widget_         = nullptr;
-   HWND                     message_window_ = nullptr;
-   POINT                    minsz_          = POINT{0, 0};
-   POINT                    maxsz_          = POINT{0, 0};
-   ICoreWebView2*           webview_        = nullptr;
-   ICoreWebView2Controller* controller_     = nullptr;
-   Webview2ComHandler*      com_handler_    = nullptr;
-   mswebview2::loader       webview2_loader_{};
-   std::wstring             wuser_data_dir_{};
+   com_init_wrapper            com_init_;
+   HWND                        window_         = nullptr;
+   HWND                        widget_         = nullptr;
+   HWND                        message_window_ = nullptr;
+   POINT                       minsz_          = POINT{0, 0};
+   POINT                       maxsz_          = POINT{0, 0};
+   ICoreWebView2*              webview_        = nullptr;
+   ICoreWebView2Controller*    controller_     = nullptr;
+   Webview2ComHandler*         com_handler_    = nullptr;
+   mswebview2::loader          webview2_loader_{};
+   std::optional<std::wstring> wuser_data_dir_{std::nullopt};
    using WebviewOptions = Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions>;
    WebviewOptions options_{};
    int            dpi_{};

@@ -13,7 +13,7 @@ else()
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(WEBVIEW_MSWEBVIEW2_VERSION "1.0.3179.45" CACHE STRING "MS WebView2 version")
+    set(WEBVIEW_MSWEBVIEW2_VERSION "1.0.3650.58" CACHE STRING "MS WebView2 version")
     option(WEBVIEW_USE_BUILTIN_MSWEBVIEW2 "Use built-in MS WebView2" ON)
 endif()
 
