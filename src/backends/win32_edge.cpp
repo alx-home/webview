@@ -910,7 +910,12 @@ Win32EdgeEngine::InstallResourceHandler() {
              if (std::regex_match(wuri, std::wregex{handler.first})) {
                 auto const request =
                   MakeRequest(utils::NarrowString(wuri), resource_context, web_view_request.Get());
-                auto const response = MakeResponse(handler.second(request), result);
+                auto const http_response = handler.second(request);
+
+                if (!http_response) {
+                   return S_OK;
+                }
+                auto const response = MakeResponse(*http_response, result);
 
                 if (result != S_OK) {
                    return result;
