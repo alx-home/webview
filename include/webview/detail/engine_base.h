@@ -77,8 +77,14 @@ enum class Hint {
    STATIC
 };
 
-using url_handler_t =
-  std::function<std::optional<http::response_t>(http::request_t const& request)>;
+struct MakeDeferred {
+   virtual ~MakeDeferred() = default;
+
+   virtual void operator()()               = 0;
+   virtual void Complete(http::response_t) = 0;
+};
+using url_handler_t = std::function<
+  std::optional<http::response_t>(http::request_t const& request, std::unique_ptr<MakeDeferred>)>;
 using binding_t         = std::function<void(std::string_view id, std::string_view args)>;
 using reverse_binding_t = std::function<void(bool error, std::string_view result)>;
 

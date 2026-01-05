@@ -244,14 +244,14 @@ public:
 
    void Dispatch(std::function<void()> f) final;
 
+   //---------------------------------------------------------------------------------------------------------------------
+   Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse>
+   MakeResponse(http::response_t const& responseData, HRESULT& result) const;
+
 private:
    void NavigateImpl(std::string_view url) final;
 
    std::multimap<std::wstring, url_handler_t, std::less<>> handlers_;
-
-   //---------------------------------------------------------------------------------------------------------------------
-   Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse>
-   MakeResponse(http::response_t const& responseData, HRESULT& result);
 
    //---------------------------------------------------------------------------------------------------------------------
    http::request_t MakeRequest(

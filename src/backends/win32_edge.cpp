@@ -29,6 +29,7 @@
 #include "detail/platform/windows/theme.h"
 
 #include <format>
+#include <functional>
 #include <optional>
 #include <regex>
 #include <utility>
@@ -880,6 +881,46 @@ Win32EdgeEngine::RegisterUrlHandler(std::string_view filter, url_handler_t handl
    handlers_.emplace(reg, std::move(handler));
 }
 
+class MakeDeferred : public webview::MakeDeferred {
+public:
+   explicit MakeDeferred(
+     Win32EdgeEngine&                                               webview,
+     ICoreWebView2WebResourceRequestedEventArgs*                    args,
+     std::function<Microsoft::WRL::ComPtr<ICoreWebView2Deferral>()> fn
+   )
+      : webview_{webview}
+      , args_{args}
+      , make_deferred_fn_{std::move(fn)} {}
+
+   void operator()() override {
+      assert(!deferral_);
+      deferral_ = make_deferred_fn_();
+   }
+
+   void Complete(http::response_t http_response) override {
+
+      webview_.Dispatch(std::function<void()>{[webview = &webview_,
+                                               http_response,
+                                               args     = std::move(args_),
+                                               deferral = std::move(deferral_)]() {
+         HRESULT result;
+
+         auto const response = webview->MakeResponse(http_response, result);
+         args->put_Response(response.Get());
+         deferral->Complete();
+      }});
+
+      deferral_ = nullptr;
+      args_     = nullptr;
+   }
+
+private:
+   Win32EdgeEngine&                                               webview_;
+   ICoreWebView2WebResourceRequestedEventArgs*                    args_;
+   std::function<Microsoft::WRL::ComPtr<ICoreWebView2Deferral>()> make_deferred_fn_;
+   Microsoft::WRL::ComPtr<ICoreWebView2Deferral>                  deferral_;
+};
+
 void
 Win32EdgeEngine::InstallResourceHandler() {
    ::EventRegistrationToken token;
@@ -910,7 +951,14 @@ Win32EdgeEngine::InstallResourceHandler() {
              if (std::regex_match(wuri, std::wregex{handler.first})) {
                 auto const request =
                   MakeRequest(utils::NarrowString(wuri), resource_context, web_view_request.Get());
-                auto const http_response = handler.second(request);
+
+                auto       make_deferred = std::make_unique<MakeDeferred>(*this, args, [&args]() {
+                   Microsoft::WRL::ComPtr<ICoreWebView2Deferral> deferral;
+                   args->GetDeferral(&deferral);
+
+                   return deferral;
+                });
+                auto const http_response = handler.second(request, std::move(make_deferred));
 
                 if (!http_response) {
                    return S_OK;
@@ -941,7 +989,7 @@ Win32EdgeEngine::InstallResourceHandler() {
 
 //---------------------------------------------------------------------------------------------------------------------
 Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse>
-Win32EdgeEngine::MakeResponse(http::response_t const& responseData, HRESULT& result) {
+Win32EdgeEngine::MakeResponse(http::response_t const& responseData, HRESULT& result) const {
    Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse> response;
    Microsoft::WRL::ComPtr<ICoreWebView2_2>                  wv22;
 #   pragma clang diagnostic push
@@ -949,10 +997,14 @@ Win32EdgeEngine::MakeResponse(http::response_t const& responseData, HRESULT& res
    result = webview_->QueryInterface(IID_PPV_ARGS(&wv22));
 #   pragma clang diagnostic pop
 
+   if (!wv22) {
+      return {};
+   }
+
    Microsoft::WRL::ComPtr<ICoreWebView2Environment> environment;
    wv22->get_Environment(&environment);
 
-   if (result != S_OK) {
+   if (result != S_OK || !environment) {
       return {};
    }
 
