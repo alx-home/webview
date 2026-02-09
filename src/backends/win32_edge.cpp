@@ -27,6 +27,7 @@
 #include "detail/engine_base.h"
 #include "detail/platform/windows/dpi.h"
 #include "detail/platform/windows/theme.h"
+#include "utils/Scoped.h"
 
 #include <format>
 #include <functional>
@@ -40,6 +41,8 @@
 #include <winerror.h>
 #include <wingdi.h>
 #include <WinUser.h>
+#include <winuser.h>
+#include <wrl/event.h>
 
 #if defined(WEBVIEW_PLATFORM_WINDOWS) && defined(WEBVIEW_EDGE)
 
@@ -290,12 +293,14 @@ Win32EdgeEngine::Win32EdgeEngine(
   std::optional<std::string_view> user_data_dir,
   DWORD                           style,
   DWORD                           exStyle,
-  std::function<void()>           on_terminate
+  std::function<void()>           on_terminate,
+  bool                            invisible
 )
    : Webview(std::move(on_terminate))
    , wuser_data_dir_{user_data_dir.has_value() ? std::optional{utils::WidenString(*user_data_dir)} : std::nullopt}
    , options_{std::move(options)}
-   , owns_window_{!window} {
+   , owns_window_{!window}
+   , invisible_{invisible} {
    if (!Webview2Available()) {
       throw Exception{error_t::WEBVIEW_ERROR_MISSING_DEPENDENCY, "WebView2 is unavailable"};
    }
@@ -396,15 +401,15 @@ Win32EdgeEngine::Win32EdgeEngine(
       RegisterClassExW(&wc);
 
       CreateWindowExW(
-        exStyle,
+        invisible ? 0 : exStyle,
         L"webview",
-        L"",
-        style,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
+        invisible ? nullptr : L"",
+        invisible ? 0 : style,
+        invisible ? 0 : CW_USEDEFAULT,
+        invisible ? 0 : CW_USEDEFAULT,
         0,
         0,
-        nullptr,
+        invisible ? HWND_MESSAGE : nullptr,
         nullptr,
         instance,
         this
@@ -425,7 +430,6 @@ Win32EdgeEngine::Win32EdgeEngine(
       window_ = window;
       dpi_    = GetWindowDpi(window_);
    }
-
    // Create a window that WebView2 will be embedded into.
    WNDCLASSEXW widget_wc{};
    widget_wc.cbSize        = sizeof(WNDCLASSEX);
@@ -790,6 +794,24 @@ Win32EdgeEngine::NavigateImpl(std::string_view url) {
 }
 
 void
+Win32EdgeEngine::WaitNavigationCompleted(std::function<void()> const& callable) {
+   EventRegistrationToken token;
+   webview_->add_NavigationCompleted(
+     Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
+       [this,
+        &token,
+        callable](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) {
+          ScopeExit _{[this, &token] { webview_->remove_NavigationCompleted(token); }};
+
+          callable();
+          return S_OK;
+       }
+     ).Get(),
+     &token
+   );
+}
+
+void
 Win32EdgeEngine::OpenDevTools() {
    webview_->OpenDevToolsWindow();
 }
@@ -1103,11 +1125,28 @@ Win32EdgeEngine::MakeRequest(
 }
 
 void
-Win32EdgeEngine::Eval(std::string_view js) {
+Win32EdgeEngine::Eval(
+  std::string_view                                                             js,
+  std::optional<std::function<void(std::optional<std::string> const&)>> const& callback
+) {
    // TODO: Skip if no content has begun loading yet. Can't check with
    //       ICoreWebView2::get_Source because it returns "about:blank".
-   Dispatch([this, wjs = utils::WidenString(js)]() constexpr {
-      webview_->ExecuteScript(wjs.c_str(), nullptr);
+   Dispatch([this, wjs = utils::WidenString(js), callback]() constexpr {
+      webview_->ExecuteScript(
+        wjs.c_str(),
+        callback.has_value() ? Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+                                 [callback = std::move(*callback)](HRESULT res, LPCWSTR result) {
+                                    if (SUCCEEDED(res)) {
+                                       callback(utils::NarrowString(result));
+                                    } else {
+                                       callback(std::nullopt);
+                                    }
+
+                                    return res;
+                                 }
+                               ).Get()
+                             : nullptr
+      );
    });
 }
 
@@ -1235,6 +1274,7 @@ Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
    }})_",
      GetNonce()
    ));
+
    ResizeWebview();
    controller_->put_IsVisible(true);
    ShowWindow(widget_, SW_SHOW);

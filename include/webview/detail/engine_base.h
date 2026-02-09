@@ -93,7 +93,8 @@ public:
    Webview(std::function<void()> on_terminate = []() constexpr {});
    virtual ~Webview() = default;
 
-   void Navigate(std::string_view url);
+   void         Navigate(std::string_view url);
+   virtual void WaitNavigationCompleted(std::function<void()> const& callable) = 0;
 
    virtual void RegisterUrlHandler(std::string_view filter, url_handler_t handler) = 0;
    virtual void
@@ -142,7 +143,11 @@ public:
    template <class... ARGS>
    constexpr void Eval(std::format_string<ARGS...> js, ARGS&&... args);
 #endif
-   virtual void Eval(std::string_view js) = 0;
+   virtual void Eval(
+     std::string_view                                                             js,
+     std::optional<std::function<void(std::optional<std::string> const&)>> const& callback =
+       std::nullopt
+   ) = 0;
 
    virtual void OpenDevTools()           = 0;
    virtual void InstallResourceHandler() = 0;

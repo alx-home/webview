@@ -32,6 +32,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 
 #if defined(__cplusplus) && !defined(WEBVIEW_HEADER)
@@ -193,7 +194,8 @@ public:
      std::function<void()>           on_terminate =
        []() constexpr {
           /* No-op: default termination handler. Add custom cleanup if needed. */
-       }
+       },
+     bool invisible = false
    );
 
    ~Win32EdgeEngine() final;
@@ -237,7 +239,11 @@ public:
    void Run() final;
    void Terminate() final;
 
-   void Eval(std::string_view js) final;
+   void Eval(
+     std::string_view                                                             js,
+     std::optional<std::function<void(std::optional<std::string> const&)>> const& callback =
+       std::nullopt
+   ) final;
    void SetHtml(std::string_view html) final;
 
    void OpenDevTools() final;
@@ -247,6 +253,8 @@ public:
    //---------------------------------------------------------------------------------------------------------------------
    Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse>
    MakeResponse(http::response_t const& responseData, HRESULT& result) const;
+
+   void WaitNavigationCompleted(std::function<void()> const& callable) final;
 
 private:
    void NavigateImpl(std::string_view url) final;
@@ -303,6 +311,7 @@ private:
    WebviewOptions options_{};
    int            dpi_{};
    bool           owns_window_{};
+   bool           invisible_{false};
 };
 
 }  // namespace detail
