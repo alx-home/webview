@@ -795,19 +795,20 @@ Win32EdgeEngine::NavigateImpl(std::string_view url) {
 
 void
 Win32EdgeEngine::WaitNavigationCompleted(std::function<void()> const& callable) {
-   EventRegistrationToken token;
+   auto token = std::make_shared<EventRegistrationToken>();
+
    webview_->add_NavigationCompleted(
      Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
        [this,
-        &token,
+        token,
         callable](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) {
-          ScopeExit _{[this, &token] { webview_->remove_NavigationCompleted(token); }};
+          webview_->remove_NavigationCompleted(*token);
 
           callable();
           return S_OK;
        }
      ).Get(),
-     &token
+     token.get()
    );
 }
 
