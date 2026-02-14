@@ -178,7 +178,7 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
                      }
                   }();
 
-                  ::Promise<void, true> wrapper{
+                  WPromise<void> wrapper{
                     std::apply(
                       [&]<class... ARGS>(ARGS&&... args) constexpr {
                          return MakeWrapper(promise, id, std::forward<ARGS>(args)...);
@@ -192,9 +192,7 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
 #endif  // !NDEBUG
                     promises_->handles_.emplace(
                       "bind_" + std::string{id},
-                      Promises::Cleaner{
-                        name, std::make_unique<::Promise<void, true>>(std::move(wrapper))
-                      }
+                      Promises::Cleaner{name, std::make_unique<WPromise<void>>(std::move(wrapper))}
                     );
                   assert(emplaced);
 
