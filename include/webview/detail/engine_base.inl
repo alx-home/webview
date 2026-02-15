@@ -59,7 +59,7 @@ void
 Webview::Promises::Cleaner::Reject(ARGS&&... args) {
    assert(!detached_);
    if (reject_) {
-      MakeReject<EXCEPTION>(*reject_, std::forward<ARGS>(args)...);
+      reject_->Apply<EXCEPTION>(std::forward<ARGS>(args)...);
    }
 }
 
@@ -250,7 +250,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
    std::shared_lock lock{mutex_};
 
    if (stop_) {
-      // Webview terminated : MakeReject may not be called as Dispatch won't be
+      // Webview terminated : reject may not be called as Dispatch won't be
       // ever depleted
       throw Exception(error_t::WEBVIEW_ERROR_CANCELED, "Webview is terminating");
    }
@@ -288,7 +288,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
            }};
 
            if (error) {
-              MakeReject<Exception>(*reject, error_t::WEBVIEW_ERROR_REJECT, result);
+              reject->template Apply<Exception>(error_t::WEBVIEW_ERROR_REJECT, result);
            } else {
               if constexpr (std::is_void_v<std::remove_cvref_t<RETURN>>) {
                  (*resolve)();
