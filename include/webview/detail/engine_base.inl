@@ -256,7 +256,7 @@ Webview::Call(std::string_view name, ARGS&&... args) {
    }
    assert(promises_);
 
-   auto [promise, resolve, reject] = promise::Pure<RETURN>();
+   auto [promise, resolve, reject] = Promise<RETURN>::Create();
 
    auto const id = std::to_string(++next_id_);
 
