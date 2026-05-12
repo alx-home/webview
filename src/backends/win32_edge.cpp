@@ -89,10 +89,12 @@ Webview2ComHandler::QueryInterface(REFIID riid, LPVOID* ppv) {
    // that it is the only interface requested in this case. None have been
    // observed to be requested when using the official WebView2 loader.
 
-   if (cast_if_equal_iid(this, riid, controller_completed, ppv)
-       || cast_if_equal_iid(this, riid, environment_completed, ppv)
-       || cast_if_equal_iid(this, riid, message_received, ppv)
-       || cast_if_equal_iid(this, riid, permission_requested, ppv)) {
+   if (
+     cast_if_equal_iid(this, riid, controller_completed, ppv)
+     || cast_if_equal_iid(this, riid, environment_completed, ppv)
+     || cast_if_equal_iid(this, riid, message_received, ppv)
+     || cast_if_equal_iid(this, riid, permission_requested, ppv)
+   ) {
       return S_OK;
    }
 
@@ -267,8 +269,8 @@ Win32EdgeEngine::SetSchemesOption(
 
       std::vector<wchar_t const*> origins{L"*", L"https://*"};
       std::vector<std::wstring>   origins_str;
-      for (auto const& scheme : schemes) {
-         origins_str.emplace_back(utils::WidenString(scheme) + L"://*");
+      for (auto const& custom_scheme : schemes) {
+         origins_str.emplace_back(utils::WidenString(custom_scheme) + L"://*");
       }
 
       for (auto const& origin : origins_str) {
@@ -765,11 +767,16 @@ Win32EdgeEngine::SetBackgroung(uint8_t red, uint8_t green, uint8_t blue, uint8_t
    SetLayeredWindowAttributes(window_, RGB(red, green, blue), alpha, LWA_COLORKEY);
 
    Microsoft::WRL::ComPtr<ICoreWebView2Controller2> controller2;
-#   pragma clang diagnostic push
-#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
-   if (auto const result = controller_->QueryInterface(IID_PPV_ARGS(&controller2));
-       result != S_OK) {
-#   pragma clang diagnostic pop
+#   ifdef __clang__
+#      pragma clang diagnostic push
+#      pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   endif
+   if (
+     auto const result = controller_->QueryInterface(IID_PPV_ARGS(&controller2)); result != S_OK
+   ) {
+#   ifdef __clang__
+#      pragma clang diagnostic pop
+#   endif
       return;
    }
 
@@ -820,11 +827,14 @@ Win32EdgeEngine::OpenDevTools() {
 Microsoft::WRL::ComPtr<ICoreWebView2CookieManager>
 Win32EdgeEngine::GetCookieManager() const {
    Microsoft::WRL::ComPtr<ICoreWebView2_2> wv2;
-
-#   pragma clang diagnostic push
-#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   ifdef __clang__
+#      pragma clang diagnostic push
+#      pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   endif
    auto result = webview_->QueryInterface(IID_PPV_ARGS(&wv2));
-#   pragma clang diagnostic pop
+#   ifdef __clang__
+#      pragma clang diagnostic pop
+#   endif
    if (result != S_OK) {
       throw Exception{
         error_t::WEBVIEW_ERROR_UNSPECIFIED,
@@ -856,10 +866,14 @@ void
 Win32EdgeEngine::RegisterUrlHandler(std::string_view filter, url_handler_t handler) {
    auto                                     wfilter = utils::WidenString(filter);
    Microsoft::WRL::ComPtr<ICoreWebView2_22> wv22;
-#   pragma clang diagnostic push
-#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   ifdef __clang__
+#      pragma clang diagnostic push
+#      pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   endif
    auto result = webview_->QueryInterface(IID_PPV_ARGS(&wv22));
-#   pragma clang diagnostic pop
+#   ifdef __clang__
+#      pragma clang diagnostic pop
+#   endif
    if (result != S_OK) {
       throw Exception{
         error_t::WEBVIEW_ERROR_UNSPECIFIED,
@@ -922,16 +936,18 @@ public:
 
    void Complete(http::response_t http_response) override {
 
-      webview_.Dispatch(std::function<void()>{[webview = &webview_,
-                                               http_response,
-                                               args     = std::move(args_),
-                                               deferral = std::move(deferral_)]() {
-         HRESULT result;
+      webview_.Dispatch(
+        std::function<void()>{[webview = &webview_,
+                               http_response,
+                               args     = std::move(args_),
+                               deferral = std::move(deferral_)]() {
+           HRESULT result;
 
-         auto const response = webview->MakeResponse(http_response, result);
-         args->put_Response(response.Get());
-         deferral->Complete();
-      }});
+           auto const response = webview->MakeResponse(http_response, result);
+           args->put_Response(response.Get());
+           deferral->Complete();
+        }}
+      );
 
       deferral_ = nullptr;
       args_     = nullptr;
@@ -1015,10 +1031,14 @@ Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse>
 Win32EdgeEngine::MakeResponse(http::response_t const& responseData, HRESULT& result) const {
    Microsoft::WRL::ComPtr<ICoreWebView2WebResourceResponse> response;
    Microsoft::WRL::ComPtr<ICoreWebView2_2>                  wv22;
-#   pragma clang diagnostic push
-#   pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   ifdef __clang__
+#      pragma clang diagnostic push
+#      pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#   endif
    result = webview_->QueryInterface(IID_PPV_ARGS(&wv22));
-#   pragma clang diagnostic pop
+#   ifdef __clang__
+#      pragma clang diagnostic pop
+#   endif
 
    if (!wv22) {
       return {};
@@ -1177,10 +1197,9 @@ Win32EdgeEngine::AddUserScriptImpl(std::string_view js) {
    // TODO: There's a non-zero chance that we didn't get the script ID.
    //       We need to convey the error somehow.
    return {
-     js,
-     user_script::impl_ptr{
-       new user_script::impl{script_id, wjs}, [](user_script::impl* p) { delete p; }
-     }
+     js, user_script::impl_ptr{new user_script::impl{script_id, wjs}, [](user_script::impl* p) {
+                                  delete p;
+                               }}
    };
 }
 
@@ -1206,9 +1225,9 @@ Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
 
    std::wstring current_exe_path;
    current_exe_path.reserve(MAX_PATH);
-   current_exe_path.resize(
-     GetModuleFileNameW(nullptr, current_exe_path.data(), current_exe_path.capacity())
-   );
+   current_exe_path.resize(GetModuleFileNameW(
+     nullptr, current_exe_path.data(), static_cast<DWORD>(current_exe_path.capacity())
+   ));
 
    std::wstring current_exe_name{PathFindFileNameW(current_exe_path.c_str())};
 
@@ -1265,16 +1284,18 @@ Win32EdgeEngine::Embed(bool debug, msg_cb_t cb) {
    if (res != S_OK) {
       throw Exception{error_t::WEBVIEW_ERROR_UNSPECIFIED, "put_IsStatusBarEnabled failed"};
    }
-   AddInitScript(std::format(
-     R"_(function(message, nonce) {{
+   AddInitScript(
+     std::format(
+       R"_(function(message, nonce) {{
          if (nonce != "{}") {{
             throw new Error('Invalid nonce \"' + nonce + '\"');
          }}
 
          return window.chrome.webview.postMessage(message);
    }})_",
-     GetNonce()
-   ));
+       GetNonce()
+     )
+   );
 
    ResizeWebview();
    controller_->put_IsVisible(true);
