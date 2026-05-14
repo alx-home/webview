@@ -25,19 +25,20 @@
 
 #include "detail/engine_base.h"
 #include "detail/user_script.h"
-#include "promise/promise.h"
-#include "utils/Scoped.h"
 
 #include "errors.h"
 
 #include <condition_variable>
 #include <exception>
 #include <format>
+#include <iostream>
 #include <json/json.h>
 #include <mutex>
+#include <promise/promise.h>
 #include <shared_mutex>
 #include <tuple>
 #include <utility>
+#include <utils/Scoped.h>
 #include <variant>
 
 namespace webview {
