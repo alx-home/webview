@@ -145,6 +145,7 @@ Webview::MakeWrapper(PROMISE&& promise, std::string_view id, ARGS&&... args) {
 }
 
 template <class PROMISE>
+   requires(promise::IS_PROMISE_FUNCTION<PROMISE>)
 void
 Webview::Bind(std::string_view name, PROMISE&& promise) {
    if (!bindings_
@@ -152,8 +153,9 @@ Webview::Bind(std::string_view name, PROMISE&& promise) {
             name,
             std::make_shared<binding_t>([this,
                                          name    = std::string{name},
-                                         promise = std::forward<PROMISE>(promise
-                                         )](std::string_view id, std::string_view js_args) {
+                                         promise = std::forward<PROMISE>(promise)](
+                                          std::string_view id, std::string_view js_args
+                                        ) {
                using args_t = promise::args_t<decltype(promise)>;
 
                if (stop_) {

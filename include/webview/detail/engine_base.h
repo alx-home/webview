@@ -26,6 +26,7 @@
 #pragma once
 
 #include "../http.h"
+#include "promise/core/concepts.inl"
 #include "promise/promise.h"
 #include "user_script.h"
 #include "utils/Nonce.h"
@@ -101,6 +102,7 @@ public:
    RegisterUrlHandlers(std::vector<std::string_view> const& filters, url_handler_t handler) = 0;
 
    template <class PROMISE>
+      requires(promise::IS_PROMISE_FUNCTION<PROMISE>)
    void Bind(std::string_view name, PROMISE&& promise);
    void Unbind(std::string_view name);
 
