@@ -288,21 +288,13 @@ Win32EdgeEngine::SetSchemesOption(
    options4->SetCustomSchemeRegistrations(static_cast<UINT32>(data.size()), ptr);
 }
 
-Win32EdgeEngine::Win32EdgeEngine(
-  bool                            debug,
-  HWND                            window,
-  WebviewOptions                  options,
-  std::optional<std::string_view> user_data_dir,
-  DWORD                           style,
-  DWORD                           exStyle,
-  std::function<void()>           on_terminate,
-  bool                            invisible
-)
-   : Webview(std::move(on_terminate))
-   , wuser_data_dir_{user_data_dir.has_value() ? std::optional{utils::WidenString(*user_data_dir)} : std::nullopt}
-   , options_{std::move(options)}
-   , owns_window_{!window}
-   , invisible_{invisible} {
+Win32EdgeEngine::Win32EdgeEngine(Args args)
+   : Webview(std::move(args.on_terminate))
+   , wuser_data_dir_{args.user_data_dir.has_value() ? std::optional{utils::WidenString(*args.user_data_dir)} : std::nullopt}
+   , options_{std::move(args.options)}
+   , owns_window_{!args.window}
+   , invisible_{args.invisible}
+   , persistent_window_{args.persistent_window} {
    if (!Webview2Available()) {
       throw Exception{error_t::WEBVIEW_ERROR_MISSING_DEPENDENCY, "WebView2 is unavailable"};
    }
@@ -352,7 +344,12 @@ Win32EdgeEngine::Win32EdgeEngine(
                w->ResizeWidget();
                break;
             case WM_CLOSE:
-               DestroyWindow(hwnd);
+               if (w->persistent_window_ && !w->stop_) {
+                  ShowWindow(hwnd, SW_HIDE);
+               } else {
+                  DestroyWindow(hwnd);
+               }
+
                break;
             case WM_DESTROY:
                w->window_ = nullptr;
@@ -403,15 +400,15 @@ Win32EdgeEngine::Win32EdgeEngine(
       RegisterClassExW(&wc);
 
       CreateWindowExW(
-        invisible ? 0 : exStyle,
+        args.invisible ? 0 : args.exStyle,
         L"webview",
-        invisible ? nullptr : L"",
-        invisible ? 0 : style,
-        invisible ? 0 : CW_USEDEFAULT,
-        invisible ? 0 : CW_USEDEFAULT,
+        args.invisible ? nullptr : L"",
+        args.invisible ? 0 : args.style,
+        args.invisible ? 0 : CW_USEDEFAULT,
+        args.invisible ? 0 : CW_USEDEFAULT,
         0,
         0,
-        invisible ? HWND_MESSAGE : nullptr,
+        args.invisible ? HWND_MESSAGE : nullptr,
         nullptr,
         instance,
         this
@@ -423,13 +420,13 @@ Win32EdgeEngine::Win32EdgeEngine(
 
       dpi_ = GetWindowDpi(window_);
 
-      if (style) {
+      if (args.style) {
          constexpr const int initial_width  = 640;
          constexpr const int initial_height = 480;
          SetSize(initial_width, initial_height, Hint::NONE);
       }
    } else {
-      window_ = window;
+      window_ = args.window;
       dpi_    = GetWindowDpi(window_);
    }
    // Create a window that WebView2 will be embedded into.
@@ -536,7 +533,7 @@ Win32EdgeEngine::Win32EdgeEngine(
       SetFocus(window_);
    }
 
-   Embed(debug, [this](std::string_view msg) { this->OnMessage(msg); });
+   Embed(args.debug, [this](std::string_view msg) { this->OnMessage(msg); });
 }
 
 Win32EdgeEngine::~Win32EdgeEngine() {

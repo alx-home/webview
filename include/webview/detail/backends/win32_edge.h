@@ -172,6 +172,25 @@ private:
    callback_fn        cb_;
    std::atomic<ULONG> ref_count_{1};
 };
+namespace Win32EdgeEngine_ {
+using WebviewOptions = Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions>;
+
+// NOLINTBEGIN(readability-identifier-naming)
+struct Args {
+   bool                            debug{false};
+   HWND                            window{nullptr};
+   WebviewOptions                  options{nullptr};
+   std::optional<std::string_view> user_data_dir{std::nullopt};
+   DWORD                           style{WS_OVERLAPPEDWINDOW};
+   DWORD                           exStyle{0};
+   std::function<void()>           on_terminate{[]() constexpr {
+      /* No-op: default termination handler. Add custom cleanup if needed. */
+   }};
+   bool                            invisible{false};
+   bool                            persistent_window{false};
+};
+// NOLINTEND(readability-identifier-naming)
+}  // namespace Win32EdgeEngine_
 
 class Win32EdgeEngine final : public Webview {
 public:
@@ -183,20 +202,9 @@ public:
      Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions> options
    );
 
-   using WebviewOptions = Microsoft::WRL::ComPtr<ICoreWebView2EnvironmentOptions>;
-   Win32EdgeEngine(
-     bool                            debug,
-     HWND                            window,
-     WebviewOptions                  options       = nullptr,
-     std::optional<std::string_view> user_data_dir = std::nullopt,
-     DWORD                           style         = WS_OVERLAPPEDWINDOW,
-     DWORD                           exStyle       = 0,
-     std::function<void()>           on_terminate =
-       []() constexpr {
-          /* No-op: default termination handler. Add custom cleanup if needed. */
-       },
-     bool invisible = false
-   );
+   using WebviewOptions = Win32EdgeEngine_::WebviewOptions;
+   using Args           = Win32EdgeEngine_::Args;
+   Win32EdgeEngine(Args args = {});
 
    ~Win32EdgeEngine() final;
 
@@ -210,8 +218,8 @@ public:
    ICoreWebView2Controller* BrowserController() const;
 
    void RegisterUrlHandler(std::string_view filter, url_handler_t handler) final;
-   void RegisterUrlHandlers(std::vector<std::string_view> const& filters, url_handler_t handler)
-     final;
+   void
+   RegisterUrlHandlers(std::vector<std::string_view> const& filters, url_handler_t handler) final;
    void InstallResourceHandler() final;
 
    void SetTitle(std::string_view title) final;
@@ -312,6 +320,7 @@ private:
    int            dpi_{};
    bool           owns_window_{};
    bool           invisible_{false};
+   bool           persistent_window_{false};
 };
 
 }  // namespace detail
